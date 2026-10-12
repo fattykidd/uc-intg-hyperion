@@ -1,0 +1,42 @@
+{
+  "driver_id": "uc-intg-hyperion",
+  "version": "0.1.0",
+  "min_core_api": "0.20.0",
+  "name": { "en": "AudioControl Hyperion APR-16" },
+  "icon": "receiver",
+  "description": {
+    "en": "Integration driver for the AudioControl Hyperion APR-16 16-channel AV Processor"
+  },
+  "developer": {
+    "name": "fattykidd",
+    "url": "https://github.com/fattykidd"
+  },
+  "home_page": "https://github.com/fattykidd/uc-intg-hyperion",
+  "setup_data_schema": {
+    "title": {
+      "en": "Integration Setup",
+      "de": "Integrationssetup",
+      "fr": "Configuration de l'intégration"
+    },
+    "settings": [
+      {
+        "id": "address",
+        "type": "text",
+        "label": {
+          "en": "IP Address or Hostname"
+        },
+        "required": true
+      },
+      {
+        "id": "port",
+        "type": "number",
+        "label": {
+          "en": "Port"
+        },
+        "default": 8080,
+        "required": true
+      }
+    ]
+  },
+  "release_date": "2026-11-10"
+}
