@@ -12,7 +12,7 @@ from asyncio import AbstractEventLoop
 from typing import Any
 import aiohttp
 
-from config import Apr16Config
+from config import APR16Config
 from ucapi import media_player
 from ucapi_framework import (
     BaseConfigManager,
@@ -33,7 +33,7 @@ class Apr16(StatelessHTTPDevice):
 
     def __init__(
         self,
-        device_config: Apr16Config,
+        device_config: APR16Config,
         loop: AbstractEventLoop | None,
         config_manager: BaseConfigManager | None = None,
         driver=None,
@@ -449,4 +449,3 @@ class Apr16(StatelessHTTPDevice):
         #         self.push_update()
         #     case _:
         #         _LOG.warning("Unknown command: %s", command)
-
