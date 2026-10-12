@@ -1,14 +1,24 @@
-# Development Dockerfile with nodemon for auto-reload
 FROM python:3.11-slim-bullseye
-WORKDIR /app
 
-# Install nodemon for auto-reload on file changes
-RUN apt-get update && apt-get install -y npm && npm install -g nodemon
+WORKDIR /app
 
 COPY ./requirements.txt requirements.txt
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
+RUN mkdir /config
 
 ADD . .
 
+# Network configuration
+ENV UC_DISABLE_MDNS_PUBLISH="false"
+ENV UC_MDNS_LOCAL_HOSTNAME=""
+ENV UC_INTEGRATION_INTERFACE="0.0.0.0"
+ENV UC_INTEGRATION_HTTP_PORT="9090"
+
+# Configuration path
+ENV UC_CONFIG_HOME="/config"
+
+# TODO: Update the image source URL
+LABEL org.opencontainers.image.source https://github.com/fattykidd/uc-intg-hyperion
+
 # TODO: Update the path if you rename the intg-template folder
-CMD ["python3", "-u", "intg-template/driver.py"]
+CMD ["python3", "-u", "intg-hyperion/driver.py"]

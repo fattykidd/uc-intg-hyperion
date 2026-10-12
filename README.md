@@ -48,12 +48,20 @@ docker run -d \
 
 #### Using Docker Compose
 ```
-services:
-  uc-hyperion-apr16:
+uc-intg-hyperion:
     image: ghcr.io/fattykidd/uc-intg-hyperion:latest
-    container_name: uc-hyperion-apr16
+    container_name: uc-intg-hyperion
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - ./hyperion/data:/data  # Persistent configuration storage
+    environment:
+      - UC_CONFIG_HOME=/data
+      - UC_INTEGRATION_INTERFACE=0.0.0.0
+      - UC_INTEGRATION_HTTP_PORT=9090
+      - UC_DISABLE_MDNS_PUBLISH=false
+      - PYTHONPATH=/app
+
 ```
 
 ## Integration Setup (Unfolded Circle Remote)
