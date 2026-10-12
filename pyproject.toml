@@ -1,6 +1,6 @@
 [project]
 name = "uc-intg-hyperion"
-version = "0.1.0"
+version = "0.1.1"
 description = "Integration driver for the AudioControl Hyperion APR-16 16-channel AV Processor"
 readme = "README.md"
 requires-python = ">=3.11"

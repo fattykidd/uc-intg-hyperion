@@ -14,7 +14,7 @@ from ucapi_framework import BaseConfigManager, BaseIntegrationDriver, get_config
 from config import APR16Config
 from device import Apr16
 from media_player import Apr16MediaPlayer
-from select import Apr16AudioModeSelect
+from selector import Apr16AudioModeSelect
 from sensor import Apr16AudioFormatSensor, Apr16VideoDetailSensor, Apr16VolumeSensor
 from setup_flow import Apr16SetupFlow
 
