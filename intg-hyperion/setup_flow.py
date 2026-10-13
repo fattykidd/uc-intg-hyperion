@@ -11,14 +11,14 @@ import logging
 from typing import Any
 import aiohttp
 
-from config import Apr16Config
+from config import APR16Config
 from ucapi import IntegrationSetupError, RequestUserInput, SetupError
 from ucapi_framework import BaseSetupFlow
 
 _LOG = logging.getLogger(__name__)
 
 
-class DeviceSetupFlow(BaseSetupFlow[Apr16Config]):
+class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
     """
     Setup flow for AudioControl Hyperion APR-16 integration.
 
