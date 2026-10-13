@@ -71,7 +71,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
 
     async def query_device(
         self, input_values: dict[str, Any]
-    ) -> Apr16Config | SetupError | RequestUserInput:
+    ) -> APR16Config | SetupError | RequestUserInput:
         """
         Create device configuration from user input, validating connectivity
         against the Hyperion APR-16 system status endpoint.
@@ -101,7 +101,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
                     
                     identifier = data.get("serial", data.get("mac", address.replace(".", "_").replace(":", "_")))
 
-            return Apr16Config(
+            return APR16Config(
                 identifier=identifier,
                 name=name,
                 address=address,
