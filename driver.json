@@ -29,7 +29,7 @@
       },
       {
         "id": "port",
-        "type": "number",
+        "type": "integer",
         "label": {
           "en": "Port"
         },
