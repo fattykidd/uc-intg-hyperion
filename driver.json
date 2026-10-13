@@ -29,11 +29,11 @@
       },
       {
         "id": "port",
-        "type": "text",
+        "type": "number",
         "label": {
           "en": "Port"
         },
-        "default": "8080",
+        "default": 8080,
         "required": true
       }
     ]

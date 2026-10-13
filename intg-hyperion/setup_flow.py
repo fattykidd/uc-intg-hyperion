@@ -60,7 +60,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
                     },
                 },
                 {
-                    "field": {"text": {"value": "8080", "min": "1", "max": "65535", "step": "1"}},
+                    "field": {"text": {"value": ""}},
                     "id": "port",
                     "label": {
                         "en": "Port",
@@ -78,7 +78,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
         """
         name = input_values.get("name", "").strip()
         address = input_values.get("address", "").strip()
-        port = input_values.get("port", "8080")
+        port = input_values.get("port", "").strip()
 
         if not address:
             _LOG.warning("Address is required, re-displaying form")
