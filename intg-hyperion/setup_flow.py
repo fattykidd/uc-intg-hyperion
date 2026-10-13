@@ -60,7 +60,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
                     },
                 },
                 {
-                    "field": {"number": {"value": 8080, "min": 1, "max": 65535}},
+                    "field": {"number": {"value": 8080, "min": 1, "max": 65535, "step": 1, "required": True}},
                     "id": "port",
                     "label": {
                         "en": "Port",
