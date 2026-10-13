@@ -1,13 +1,19 @@
 FROM python:3.13-slim
 WORKDIR /app
 
-# Install nodemon for auto-reload on file changes
-RUN apt-get update && apt-get install -y npm && npm install -g nodemon
+# Install Node.js, npm, and nodemon for auto-reload on file changes
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements.txt requirements.txt
+RUN npm install -g nodemon
+
+COPY requirements.txt requirements.txt
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
+RUN mkdir /config
 
 ADD . .
 
-# TODO: Update the path if you rename the intg-hyperion folder
-CMD ["python3", "-u", "intg-hyperion/driver.py"]
+# Run via nodemon so it auto-restarts when your Python files change
+CMD ["nodemon", "--exec", "python3", "-u", "intg-hyperion/driver.py"]

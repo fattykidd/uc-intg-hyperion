@@ -20,7 +20,7 @@ services:
   # TODO: Rename 'intg-template' to match your integration folder
   intg-hyperion:
      build:
-       context: .
+       context: ..
        dockerfile: dev/Dockerfile
      hostname: hyperion
      # nodemon watches for file changes and auto-restarts
