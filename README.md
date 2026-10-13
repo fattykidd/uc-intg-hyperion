@@ -82,5 +82,5 @@ uc-intg-hyperion:
 ## Acknowledgments & Attribution
 
 - **Framework**: Built on top of the Unfolded Circle Python driver framework ([`ucapi-framework`](https://github.com/JackJPowell/ucapi-framework)) created by **Jack Powell** ([@JackJPowell](https://github.com/JackJPowell)).
-- **Template**: Built using the the template made available by **Jack Powell** https://github.com/JackJPowell/uc-intg-template
+- **Template**: Built using the the template made available and created by **Jack Powell** (['uc-intg-template'](https://github.com/JackJPowell/uc-intg-template))
 - **Development**: Developed with collaborative AI architecture and driver implementation support from **Gemini**.
