@@ -13,7 +13,7 @@ from ucapi_framework.entities import SelectEntity
 _LOG = logging.getLogger(__name__)
 
 
-class Apr16AudioModeSelect(select.Select):
+class Apr16AudioModeSelect(SelectEntity):
     """
     Select entity for changing audio listening/upmixing modes.
     """

@@ -47,7 +47,7 @@ class Apr16VolumeSensor(sensor.Sensor):
             )
 
 
-class Apr16AudioFormatSensor(sensor.Sensor):
+class Apr16AudioFormatSensor(SensorEntity):
     """
     Sensor entity for displaying the active audio codec and format.
     """
@@ -77,7 +77,7 @@ class Apr16AudioFormatSensor(sensor.Sensor):
             )
 
 
-class Apr16VideoDetailSensor(sensor.Sensor):
+class Apr16VideoDetailSensor(SensorEntity):
     """
     Sensor entity for displaying active video resolution and HDR details.
     """

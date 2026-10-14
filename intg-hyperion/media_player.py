@@ -19,7 +19,7 @@ from ucapi_framework.entities import MediaPlayerEntity
 _LOG = logging.getLogger(__name__)
 
 
-class Apr16MediaPlayer(media_player.MediaPlayer):
+class Apr16MediaPlayer(MediaPlayerEntity):
     """
     Media player entity for the AudioControl Hyperion APR-16 processor.
     """
