@@ -62,7 +62,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     },
                 },
                 {
-                    "field": {"text": {"value": "8080", "min": 1, "max": 65535}},
+                    "field": {"number": {"value": "8080", "min": 1, "max": 65535}},
                     "id": "port",
                     "label": {
                         "en": "Port",
