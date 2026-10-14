@@ -12,5 +12,38 @@
     "url": "https://github.com/fattykidd"
   },
   "home_page": "https://github.com/fattykidd/uc-intg-hyperion",
+  "setup_data_schema": {
+    "title": {
+      "en": "Integration Setup",
+      "de": "Integrationssetup",
+      "fr": "Configuration de l'intégration"
+    },
+    "settings": [
+      {
+        "id": "name",
+        "type": "text",
+        "label": {
+          "en": "Device Name"
+        },
+        "required": false
+      },
+      {
+        "id": "address",
+        "type": "text",
+        "label": {
+          "en": "IP Address or Hostname"
+        },
+        "required": true
+      },
+      {
+        "id": "port",
+        "type": "integer",
+        "label": {
+          "en": "Port"
+        },
+        "required": true
+      }
+    ]
+  },
   "release_date": "2026-11-10"
 }
