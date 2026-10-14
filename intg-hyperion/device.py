@@ -12,6 +12,7 @@ from asyncio import AbstractEventLoop
 from typing import Any
 import aiohttp
 
+from dataclasses import dataclass
 from config import APR16Config
 from ucapi import media_player
 from ucapi_framework import (

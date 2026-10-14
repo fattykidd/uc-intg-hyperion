@@ -29,7 +29,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         """
         Return the manual entry form for device setup.
         """
-        return (
+        return RequestUserInput(
             {"en": "AudioControl Hyperion APR-16 Setup"},
             [
                 {
@@ -62,7 +62,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     },
                 },
                 {
-                    "field": {"text": {"value": ""}},
+                    "field": {"text": {"value": "8080", "min": 1, "max": 65535}},
                     "id": "port",
                     "label": {
                         "en": "Port",
@@ -80,7 +80,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         """
         name = input_values.get("name", "").strip()
         address = input_values.get("address", "").strip()
-        port = input_values.get("port", "").strip()
+        port = input_values.get("port", "8080")
 
         if not address:
             _LOG.warning("Address is required, re-displaying form")
