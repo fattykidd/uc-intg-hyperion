@@ -17,6 +17,7 @@ from ucapi import media_player
 from ucapi_framework import (
     BaseConfigManager,
     StatelessHTTPDevice,
+    BaseIntegrationDriver,
 )
 from ucapi_framework.helpers import MediaPlayerAttributes
 
