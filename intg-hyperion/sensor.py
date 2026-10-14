@@ -7,8 +7,11 @@ Exposes read-only sensor entities for audio format, video details, and volume le
 import logging
 from typing import Any
 
-from ucapi import sensor
+from ucapi import EntityTypes
+from ucapi_framework import create_entity_id
+from ucapi.sensor import Attributes, DeviceClasses, States
 from device import Apr16
+from ucapi_framework.entities import SensorEntity
 
 _LOG = logging.getLogger(__name__)
 
@@ -32,12 +35,16 @@ class Apr16VolumeSensor(sensor.Sensor):
         """Fetch the latest master volume level from the device."""
         try:
             vol = await self._device.get_volume()
-            vol_str = f"{vol:.1f}" if isinstance(vol, (int, float)) else str(vol)
+            vol_str = (
+                f"{vol:.1f}" if isinstance(vol, (int, float)) else str(vol)
+            )
             if self.state != vol_str:
                 self.state = vol_str
                 await self.push_update()
         except Exception as err:
-            _LOG.debug("[%s] Failed to update volume sensor: %s", self.identifier, err)
+            _LOG.debug(
+                "[%s] Failed to update volume sensor: %s", self.identifier, err
+            )
 
 
 class Apr16AudioFormatSensor(sensor.Sensor):
@@ -63,7 +70,11 @@ class Apr16AudioFormatSensor(sensor.Sensor):
                 self.state = format_str
                 await self.push_update()
         except Exception as err:
-            _LOG.debug("[%s] Failed to update audio format sensor: %s", self.identifier, err)
+            _LOG.debug(
+                "[%s] Failed to update audio format sensor: %s",
+                self.identifier,
+                err,
+            )
 
 
 class Apr16VideoDetailSensor(sensor.Sensor):
@@ -88,11 +99,19 @@ class Apr16VideoDetailSensor(sensor.Sensor):
             resolution = data.get("resolution", "Unknown")
             framerate = data.get("framerate", "")
             hdr = str(data.get("hdr", "SDR")).upper()
-            
-            state_str = f"{resolution} @ {framerate} ({hdr})" if framerate else f"{resolution} ({hdr})"
-            
+
+            state_str = (
+                f"{resolution} @ {framerate} ({hdr})"
+                if framerate
+                else f"{resolution} ({hdr})"
+            )
+
             if self.state != state_str:
                 self.state = state_str
                 await self.push_update()
         except Exception as err:
-            _LOG.debug("[%s] Failed to update video detail sensor: %s", self.identifier, err)
+            _LOG.debug(
+                "[%s] Failed to update video detail sensor: %s",
+                self.identifier,
+                err,
+            )

@@ -9,13 +9,21 @@ import asyncio
 import logging
 import os
 
-from ucapi_framework import BaseConfigManager, BaseIntegrationDriver, get_config_path
+from ucapi_framework import (
+    BaseConfigManager,
+    BaseIntegrationDriver,
+    get_config_path,
+)
 
 from config import APR16Config
 from device import Apr16
 from media_player import Apr16MediaPlayer
 from selector import Apr16AudioModeSelect
-from sensor import Apr16AudioFormatSensor, Apr16VideoDetailSensor, Apr16VolumeSensor
+from sensor import (
+    Apr16AudioFormatSensor,
+    Apr16VideoDetailSensor,
+    Apr16VolumeSensor,
+)
 from setup_flow import HyperionSetupFlow
 
 
