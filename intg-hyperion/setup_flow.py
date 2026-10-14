@@ -1,12 +1,3 @@
-"""
-Setup Flow Module for AudioControl Hyperion APR-16.
-
-This module handles the device setup and configuration process. It provides
-forms for manual device entry and validation of device connections.
-
-:license: Mozilla Public License Version 2.0, see LICENSE for more details.
-"""
-
 import logging
 from typing import Any
 import aiohttp
@@ -21,70 +12,55 @@ _LOG = logging.getLogger(__name__)
 class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
     """
     Setup flow for AudioControl Hyperion APR-16 integration.
-
-    Handles device configuration through manual entry and verifies connectivity.
     """
 
-    def get_manual_entry_form(self) -> RequestUserInput:
-        """
-        Return the manual entry form for device setup.
-        """
-        return RequestUserInput(
-            {"en": "AudioControl Hyperion APR-16 Setup"},
-            [
-                {
-                    "id": "info",
-                    "label": {
-                        "en": "Configure Hyperion APR-16",
-                    },
-                    "field": {
-                        "label": {
-                            "value": {
-                                "en": (
-                                    "Please enter the connection details for your AudioControl Hyperion APR-16 processor.",
-                                ),
-                            }
-                        }
-                    },
-                },
-                {
-                    "field": {"text": {"value": ""}},
-                    "id": "name",
-                    "label": {
-                        "en": "Device Name",
-                    },
-                },
-                {
-                    "field": {"text": {"value": ""}},
-                    "id": "address",
-                    "label": {
-                        "en": "IP Address or Hostname",
-                    },
-                },
-                {
-                    "field": {"number": {"value": "8080", "min": 1, "max": 65535}},
-                    "id": "port",
-                    "label": {
-                        "en": "Port",
-                    },
-                },
-            ],
-        )
-
-    async def query_device(
-        self, input_values: dict[str, Any]
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
     ) -> APR16Config | SetupError | RequestUserInput:
-        """
-        Create device configuration from user input, validating connectivity
-        against the Hyperion APR-16 system status endpoint.
-        """
-        name = input_values.get("name", "").strip()
-        address = input_values.get("address", "").strip()
-        port = input_values.get("port", "8080")
+        """Handle the initial user setup step."""
+        
+        # If no user input has been submitted yet, render the form
+        if user_input is None:
+            return RequestUserInput(
+                {"en": "AudioControl Hyperion APR-16 Setup"},
+                [
+                    {
+                        "id": "info",
+                        "label": {"en": "Configure Hyperion APR-16"},
+                        "field": {
+                            "label": {
+                                "value": {
+                                    "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor."
+                                }
+                            }
+                        },
+                    },
+                    {
+                        "field": {"text": {"value": ""}},
+                        "id": "name",
+                        "label": {"en": "Device Name"},
+                    },
+                    {
+                        "field": {"text": {"value": ""}},
+                        "id": "address",
+                        "label": {"en": "IP Address or Hostname"},
+                    },
+                    {
+                        "field": {"integer": {"value": 8080, "min": 1, "max": 65535}},
+                        "id": "port",
+                        "label": {"en": "Port"},
+                    },
+                ],
+            )
+
+        # User submitted the form, now process and validate input values
+        name = user_input.get("name", "").strip()
+        address = user_input.get("address", "").strip()
+        port = user_input.get("port", 8080)
 
         if not address:
             _LOG.warning("Address is required, re-displaying form")
-            return self.get_manual_entry_form()
+            return await self.async_step_user(None)
 
         if not name:
             name = f"Hyperion APR-16 ({address})"
