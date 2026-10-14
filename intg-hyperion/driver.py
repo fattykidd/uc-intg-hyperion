@@ -16,7 +16,7 @@ from device import Apr16
 from media_player import Apr16MediaPlayer
 from selector import Apr16AudioModeSelect
 from sensor import Apr16AudioFormatSensor, Apr16VideoDetailSensor, Apr16VolumeSensor
-from setup_flow import DeviceSetupFlow
+from setup_flow import HyperionSetupFlow
 
 
 async def main():
@@ -54,7 +54,7 @@ async def main():
     await driver.register_all_configured_devices()
 
     # Setup handler for manual IP/port entry (discovery removed)
-    setup_handler = DeviceSetupFlow.create_handler(driver, discovery=None)
+    setup_handler = HyperionSetupFlow.create_handler(driver, discovery=None)
 
     # Initialize the API with the driver configuration
     await driver.api.init("driver.json", setup_handler)

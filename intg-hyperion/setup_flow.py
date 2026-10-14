@@ -18,7 +18,7 @@ from ucapi_framework import BaseSetupFlow
 _LOG = logging.getLogger(__name__)
 
 
-class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
+class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
     """
     Setup flow for AudioControl Hyperion APR-16 integration.
 
@@ -29,7 +29,7 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
         """
         Return the manual entry form for device setup.
         """
-        return RequestUserInput(
+        return (
             {"en": "AudioControl Hyperion APR-16 Setup"},
             [
                 {
@@ -40,8 +40,10 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
                     "field": {
                         "label": {
                             "value": {
-                                "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor.",
-                            },
+                                "en": (
+                                    "Please enter the connection details for your AudioControl Hyperion APR-16 processor.",
+                                ),
+                            }
                         }
                     },
                 },
@@ -87,19 +89,28 @@ class DeviceSetupFlow(BaseSetupFlow[APR16Config]):
         if not name:
             name = f"Hyperion APR-16 ({address})"
 
-        _LOG.debug("Attempting to connect to AudioControl Hyperion APR-16 at %s:%s", address, port)
+        _LOG.debug(
+            "Attempting to connect to AudioControl Hyperion APR-16 at %s:%s",
+            address,
+            port,
+        )
         base_url = f"http://{address}:{port}"
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    f"{base_url}/v1/status", 
-                    timeout=aiohttp.ClientTimeout(total=5)
+                    f"{base_url}/v1/status",
+                    timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
-                    
-                    identifier = data.get("serial", data.get("mac", address.replace(".", "_").replace(":", "_")))
+
+                    identifier = data.get(
+                        "serial",
+                        data.get(
+                            "mac", address.replace(".", "_").replace(":", "_")
+                        ),
+                    )
 
             return APR16Config(
                 identifier=identifier,
