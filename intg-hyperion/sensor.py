@@ -16,7 +16,7 @@ from ucapi_framework.entities import SensorEntity
 _LOG = logging.getLogger(__name__)
 
 
-class Apr16VolumeSensor(sensor.Sensor):
+class Apr16VolumeSensor(SensorEntity):
     """
     Sensor entity for displaying the master volume level.
     """
@@ -26,7 +26,7 @@ class Apr16VolumeSensor(sensor.Sensor):
             identifier=f"{device.identifier}_volume",
             name=f"{device.name} Volume",
             native_unit_of_measurement=None,  # Or "%" / "dB" depending on your API display preference
-            device_class=sensor.DeviceClass.TEXT,
+            device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
         self.state = "0.0"
@@ -57,7 +57,7 @@ class Apr16AudioFormatSensor(SensorEntity):
             identifier=f"{device.identifier}_audio_format",
             name=f"{device.name} Audio Format",
             native_unit_of_measurement=None,
-            device_class=sensor.DeviceClass.TEXT,
+            device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
         self.state = "Unknown"
@@ -87,7 +87,7 @@ class Apr16VideoDetailSensor(SensorEntity):
             identifier=f"{device.identifier}_video_detail",
             name=f"{device.name} Video Signal",
             native_unit_of_measurement=None,
-            device_class=sensor.DeviceClass.TEXT,
+            device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
         self.state = "No Signal"
