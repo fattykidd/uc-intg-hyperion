@@ -12,8 +12,6 @@ _LOG = logging.getLogger(__name__)
 class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
     """
     Setup flow for AudioControl Hyperion APR-16 integration.
-
-    Handles device configuration through manual entry and verifies connectivity.
     """
 
     def get_manual_entry_form(self) -> RequestUserInput:
@@ -26,12 +24,14 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 {
                     "id": "info",
                     "label": {
-                        "en": "Configure Hyperion APR-16",
+                        "en": "Setup your Hyperion APR-16",
                     },
                     "field": {
                         "label": {
                             "value": {
-                                "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor."
+                                "en": (
+                                    "Please supply the IP address and Port for your AudioControl Hyperion APR-16 processor."
+                                )
                             }
                         }
                     },
@@ -51,7 +51,8 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     },
                 },
                 {
-                    "field": {"text": {"value": ""}},
+                    # Use text field just like Jack's driver to ensure frontend compatibility
+                    "field": {"text": {"value": "8080"}},
                     "id": "port",
                     "label": {
                         "en": "Port",
@@ -64,15 +65,20 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         self, input_values: dict[str, Any]
     ) -> APR16Config | SetupError | RequestUserInput:
         """
-        Create device configuration from user input, validating connectivity
-        against the Hyperion APR-16 system status endpoint.
+        Create device configuration from user input, validating connectivity.
         """
         name = input_values.get("name", "").strip()
         address = input_values.get("address", "").strip()
-        port = input_values.get("port")
+        raw_port = str(input_values.get("port", "8080")).strip()
 
-        if not address or not port:
+        if not address or not raw_port:
             _LOG.warning("Address and port are required, re-displaying form")
+            return self.get_manual_entry_form()
+
+        try:
+            port = int(raw_port)
+        except ValueError:
+            _LOG.error("Invalid port provided: %s", raw_port)
             return self.get_manual_entry_form()
 
         if not name:

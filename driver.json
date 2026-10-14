@@ -20,28 +20,17 @@
     },
     "settings": [
       {
-        "id": "name",
-        "type": "text",
+        "id": "info",
         "label": {
-          "en": "Device Name"
+          "en": "Setup process"
         },
-        "required": false
-      },
-      {
-        "id": "address",
-        "type": "text",
-        "label": {
-          "en": "IP Address or Hostname"
-        },
-        "required": true
-      },
-      {
-        "id": "port",
-        "type": "text",
-        "label": {
-          "en": "Port"
-        },
-        "required": true
+        "field": {
+          "label": {
+            "value": {
+              "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor."
+            }
+          }
+        }
       }
     ]
   },
