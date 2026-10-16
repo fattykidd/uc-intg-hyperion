@@ -1,12 +1,20 @@
+"""
+Setup flow for AudioControl Hyperion APR-16 integration.
+"""
+
+from __future__ import annotations
+
 import logging
 from typing import Any
 import aiohttp
 
 from config import APR16Config
-from ucapi import IntegrationSetupError, RequestUserInput, SetupError
+from ucapi import RequestUserInput
 from ucapi_framework import BaseSetupFlow
 
 _LOG = logging.getLogger(__name__)
+
+DEFAULT_NAME = "AudioControl Hyperion APR-16"
 
 
 class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
@@ -14,72 +22,75 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
     Setup flow for AudioControl Hyperion APR-16 integration.
     """
 
-    def get_manual_entry_form(self) -> RequestUserInput:
-        """
-        Return the manual entry form for device setup.
-        """
-        return RequestUserInput(
-            {"en": "AudioControl Hyperion APR-16 Setup"},
+    def _existing_config(self) -> APR16Config | None:
+        """Return the saved config when updating an existing device."""
+        if self._add_mode:
+            return None
+        return self.selected_config_entry
+
+    def _build_form(
+        self,
+        name: str,
+        address: str,
+        port: str,
+        error: str | None = None,
+    ) -> RequestUserInput:
+        """Build the input form, optionally displaying an inline error message."""
+        settings: list[dict[str, Any]] = []
+        if error:
+            settings.append(
+                {
+                    "id": "error",
+                    "label": {"en": "Error"},
+                    "field": {"label": {"value": {"en": error}}},
+                }
+            )
+
+        settings.extend(
             [
                 {
-                    "id": "info",
-                    "label": {
-                        "en": "Setup your Hyperion APR-16",
-                    },
-                    "field": {
-                        "label": {
-                            "value": {
-                                "en": (
-                                    "Please supply the IP address and Port for your AudioControl Hyperion APR-16 processor."
-                                )
-                            }
-                        }
-                    },
-                },
-                {
-                    "field": {"text": {"value": ""}},
                     "id": "name",
-                    "label": {
-                        "en": "Device Name",
-                    },
+                    "label": {"en": "Device Name"},
+                    "field": {"text": {"value": name}},
                 },
                 {
-                    "field": {"text": {"value": ""}},
                     "id": "address",
-                    "label": {
-                        "en": "IP Address or Hostname",
-                    },
+                    "label": {"en": "IP Address or Hostname"},
+                    "field": {"text": {"value": address}},
                 },
                 {
-                    # Use text field just like Jack's driver to ensure frontend compatibility
-                    "field": {"text": {"value": "8080"}},
                     "id": "port",
-                    "label": {
-                        "en": "Port",
-                    },
+                    "label": {"en": "Port"},
+                    "field": {"text": {"value": port}},
                 },
-            ],
+            ]
         )
+        return RequestUserInput({"en": "AudioControl Hyperion APR-16 Setup"}, settings)
+
+    def get_manual_entry_form(self) -> RequestUserInput:
+        """Define manual entry fields, prefilled with saved values on update."""
+        existing = self._existing_config()
+        if existing:
+            return self._build_form(existing.name, existing.address, str(existing.port))
+        return self._build_form(DEFAULT_NAME, "", "8080")
 
     async def query_device(
         self, input_values: dict[str, Any]
-    ) -> APR16Config | SetupError | RequestUserInput:
+    ) -> APR16Config | RequestUserInput:
         """
         Create device configuration from user input, validating connectivity.
         """
-        name = input_values.get("name", "").strip()
-        address = input_values.get("address", "").strip()
-        raw_port = str(input_values.get("port", "8080")).strip()
+        name = (input_values.get("name") or "").strip()
+        address = (input_values.get("address") or "").strip()
+        raw_port = (input_values.get("port") or "8080").strip()
 
-        if not address or not raw_port:
-            _LOG.warning("Address and port are required, re-displaying form")
-            return self.get_manual_entry_form()
+        if not address:
+            return self._build_form(name, address, raw_port, "IP address or hostname is required.")
 
         try:
             port = int(raw_port)
         except ValueError:
-            _LOG.error("Invalid port provided: %s", raw_port)
-            return self.get_manual_entry_form()
+            return self._build_form(name, address, raw_port, f"Invalid port provided: {raw_port}")
 
         if not name:
             name = f"Hyperion APR-16 ({address})"
@@ -100,13 +111,13 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     resp.raise_for_status()
                     data = await resp.json()
 
-                    identifier = data.get(
+                    existing = self._existing_config()
+                    identifier = existing.identifier if existing else data.get(
                         "serial",
-                        data.get(
-                            "mac", address.replace(".", "_").replace(":", "_")
-                        ),
+                        data.get("mac", address.replace(".", "_").replace(":", "_")),
                     )
 
+            _LOG.info("Successfully connected to Hyperion APR-16 at %s:%s", address, port)
             return APR16Config(
                 identifier=identifier,
                 name=name,
@@ -116,12 +127,25 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
 
         except (aiohttp.ClientConnectionError, ConnectionError) as ex:
             _LOG.error("Connection refused to %s:%s: %s", address, port, ex)
-            return SetupError(IntegrationSetupError.CONNECTION_REFUSED)
-
+            return self._build_form(
+                name,
+                address,
+                raw_port,
+                "Connection refused. Check that the device is powered on and reachable.",
+            )
         except TimeoutError as ex:
             _LOG.error("Connection timeout to %s:%s: %s", address, port, ex)
-            return SetupError(IntegrationSetupError.TIMEOUT)
-
+            return self._build_form(
+                name,
+                address,
+                raw_port,
+                "Connection timed out. Please check the IP address and port.",
+            )
         except Exception as ex:
             _LOG.error("Failed to connect to %s:%s: %s", address, port, ex)
-            return SetupError(IntegrationSetupError.CONNECTION_REFUSED)
+            return self._build_form(
+                name,
+                address,
+                raw_port,
+                f"Connection failed: {ex}",
+            )
