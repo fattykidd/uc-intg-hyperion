@@ -5,9 +5,16 @@ This module defines the Media Player entity and maps Unfolded Circle remote
 commands to the APR-16 device API.
 """
 
+import logging
+from typing import Any
+
 from ucapi import StatusCodes
 from ucapi.media_player import Attributes, Commands, DeviceClasses, Features, States
 from ucapi_framework import MediaPlayerEntity
+
+from device import Apr16
+
+_LOG = logging.getLogger(__name__)
 
 FEATURES = [
     Features.ON_OFF,
