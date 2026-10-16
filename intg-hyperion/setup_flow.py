@@ -80,6 +80,8 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         """
         Create device configuration from user input, validating connectivity.
         """
+        _LOG.info("Received query_device input: %s", input_values)
+        
         name = (input_values.get("name") or "").strip()
         address = (input_values.get("address") or "").strip()
         raw_port = (input_values.get("port") or "8080").strip()
