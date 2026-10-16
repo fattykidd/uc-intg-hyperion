@@ -55,7 +55,7 @@ class Apr16(StatelessHTTPDevice):
         )
 
         # Store the base URL for direct HTTP communication
-        self._base_url = f"http://{device_config.address}"
+        self._base_url = f"http://{device_config.address}:{device_config.port}"
 
         # State dicts keyed by device_id (identifier), not entity_id.
         # Seed with defaults so accessors always return a valid object.
@@ -114,24 +114,19 @@ class Apr16(StatelessHTTPDevice):
     @property
     def source(self) -> str:
         """Return the current input source."""
-        return self._state_values.get("input") or ""
+        attrs = self._media_player_attributes.get(self.identifier)
+        return attrs.SOURCE if attrs else ""
 
     @property
     def source_list(self) -> list[str]:
         """Return the list of available input sources."""
-        return self._source_list
-
-    @property
-    def state(self) -> media_player.States | None:
-        """Return the current power state."""
         attrs = self._media_player_attributes.get(self.identifier)
-        return attrs.STATE if attrs else None
+        return attrs.SOURCE_LIST if attrs else []
 
     @property
     def log_id(self) -> str:
         """Return a log identifier for debugging."""
         return self.name if self.name else self.identifier
-
     def get_media_player_attributes(
         self, device_id: str
     ) -> MediaPlayerAttributes | None:

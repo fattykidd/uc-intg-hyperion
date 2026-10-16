@@ -26,6 +26,26 @@ from sensor import (
 )
 from setup_flow import HyperionSetupFlow
 
+_LOG = logging.getLogger(__name__)
+
+
+class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
+    """AudioControl Hyperion APR-16 integration driver."""
+
+    def __init__(self):
+        super().__init__(
+            device_class=Apr16,
+            entity_classes=[
+                Apr16MediaPlayer,
+                Apr16AudioModeSelect,
+                Apr16AudioFormatSensor,
+                Apr16VideoDetailSensor,
+                Apr16VolumeSensor,
+            ],
+            driver_id="audiocontrol_hyperion_apr16",
+            require_connection_before_registry=True,
+        )
+
 
 async def main():
     """Start the Remote Two/3 integration driver."""
@@ -38,17 +58,8 @@ async def main():
     logging.getLogger("device").setLevel(level)
     logging.getLogger("setup_flow").setLevel(level)
 
-    # Create the integration driver with all of our custom entities
-    driver = BaseIntegrationDriver(
-        device_class=Apr16,
-        entity_classes=[
-            Apr16MediaPlayer,
-            Apr16AudioModeSelect,
-            Apr16AudioFormatSensor,
-            Apr16VideoDetailSensor,
-            Apr16VolumeSensor,
-        ],
-    )
+    # Instantiate our custom driver class
+    driver = Apr16Driver()
 
     # Configure and initialize configuration manager using APR16Config
     driver.config_manager = BaseConfigManager(
@@ -61,7 +72,7 @@ async def main():
     # Register all configured devices from config file
     await driver.register_all_configured_devices()
 
-    # Setup handler for manual IP/port entry (discovery removed)
+    # Setup handler for manual IP/port entry
     setup_handler = HyperionSetupFlow.create_handler(driver, discovery=None)
 
     # Initialize the API with the driver configuration
