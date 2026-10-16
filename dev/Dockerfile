@@ -15,5 +15,5 @@ RUN mkdir /config
 
 ADD . .
 
-# Run via nodemon so it auto-restarts when your Python files change
-CMD ["nodemon", "--exec", "python3", "-u", "intg-hyperion/driver.py"]
+# Run via nodemon so it auto-restarts only when your Python files change
+CMD ["nodemon", "--ext", "py", "--exec", "python3", "-u", "intg-hyperion/driver.py"]
