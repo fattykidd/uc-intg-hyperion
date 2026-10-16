@@ -54,6 +54,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 "Analog 5",
             ],
         )
+        self._device_config = device_config
         self._device = device
 
     async def async_turn_on(self) -> None:
