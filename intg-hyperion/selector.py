@@ -19,9 +19,9 @@ class Apr16AudioModeSelect(SelectEntity):
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            identifier=f"select.{device_config.identifier}_audio_mode",
-            name=f"{device_config.name} Audio Mode",
-            options=[
+            f"select.{device_config.identifier}_audio_mode",
+            f"{device_config.name} Audio Mode",
+            [
                 "Stereo",
                 "All Channel Stereo",
                 "Dolby Surround",
