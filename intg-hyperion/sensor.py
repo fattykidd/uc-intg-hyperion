@@ -7,9 +7,6 @@ Exposes read-only sensor entities for audio format, video details, and volume le
 import logging
 from typing import Any
 
-from ucapi import EntityTypes
-from ucapi_framework import create_entity_id
-from ucapi.sensor import Attributes, DeviceClasses, States
 from device import Apr16
 from ucapi_framework.entities import SensorEntity
 
@@ -21,14 +18,15 @@ class Apr16VolumeSensor(SensorEntity):
     Sensor entity for displaying the master volume level.
     """
 
-    def __init__(self, device: Apr16):
+    def __init__(self, device_config, device: Apr16):
         super().__init__(
-            identifier=f"{device.identifier}_volume",
-            name=f"{device.name} Volume",
-            native_unit_of_measurement=None,  # Or "%" / "dB" depending on your API display preference
+            identifier=f"sensor.{device_config.identifier}_volume",
+            name=f"{device_config.name} Volume",
+            native_unit_of_measurement=None,
             device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
+        self._device_config = device_config
         self.state = "0.0"
 
     async def async_update(self) -> None:
@@ -52,14 +50,15 @@ class Apr16AudioFormatSensor(SensorEntity):
     Sensor entity for displaying the active audio codec and format.
     """
 
-    def __init__(self, device: Apr16):
+    def __init__(self, device_config, device: Apr16):
         super().__init__(
-            identifier=f"{device.identifier}_audio_format",
-            name=f"{device.name} Audio Format",
+            identifier=f"sensor.{device_config.identifier}_audio_format",
+            name=f"{device_config.name} Audio Format",
             native_unit_of_measurement=None,
             device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
+        self._device_config = device_config
         self.state = "Unknown"
 
     async def async_update(self) -> None:
@@ -82,14 +81,15 @@ class Apr16VideoDetailSensor(SensorEntity):
     Sensor entity for displaying active video resolution and HDR details.
     """
 
-    def __init__(self, device: Apr16):
+    def __init__(self, device_config, device: Apr16):
         super().__init__(
-            identifier=f"{device.identifier}_video_detail",
-            name=f"{device.name} Video Signal",
+            identifier=f"sensor.{device_config.identifier}_video_detail",
+            name=f"{device_config.name} Video Signal",
             native_unit_of_measurement=None,
             device_class=SensorEntity.DeviceClass.TEXT,
         )
         self._device = device
+        self._device_config = device_config
         self.state = "No Signal"
 
     async def async_update(self) -> None:

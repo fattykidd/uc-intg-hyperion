@@ -1,13 +1,12 @@
 """
-Select entity definitions for audio modes on the AudioControl Hyperion APR-16.
+Select entity definition for audio modes on the AudioControl Hyperion APR-16.
 """
 
 import logging
 from typing import Any
 
-from ucapi import EntityTypes
+from ucapi import StatusCodes
 from device import Apr16
-from ucapi_framework import create_entity_id
 from ucapi_framework.entities import SelectEntity
 
 _LOG = logging.getLogger(__name__)
@@ -18,10 +17,10 @@ class Apr16AudioModeSelect(SelectEntity):
     Select entity for changing audio listening/upmixing modes.
     """
 
-    def __init__(self, device: Apr16):
+    def __init__(self, device_config, device: Apr16):
         super().__init__(
-            identifier=f"{device.identifier}_audio_mode",
-            name=f"{device.name} Audio Mode",
+            identifier=f"select.{device_config.identifier}_audio_mode",
+            name=f"{device_config.name} Audio Mode",
             options=[
                 "Stereo",
                 "All Channel Stereo",
@@ -32,6 +31,7 @@ class Apr16AudioModeSelect(SelectEntity):
             ],
         )
         self._device = device
+        self._device_config = device_config
         self.state = "Stereo"
 
     async def async_select_option(self, option: str) -> None:
