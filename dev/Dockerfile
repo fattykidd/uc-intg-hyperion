@@ -1,7 +1,6 @@
 FROM python:3.13-slim
 WORKDIR /app
 
-# Install Node.js, npm, and nodemon for auto-reload on file changes
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
@@ -15,5 +14,5 @@ RUN mkdir /config
 
 ADD . .
 
-# Run via nodemon so it auto-restarts only when your Python files change
-CMD ["nodemon", "--ext", "py", "--exec", "python3", "-u", "intg-hyperion/driver.py"]
+# Nodemon automatically detects nodemon.json in /app
+CMD ["nodemon", "--config", "nodemon.json", "--exec", "python3 -u intg-hyperion/driver.py"]

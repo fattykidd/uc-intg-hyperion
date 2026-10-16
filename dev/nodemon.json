@@ -1,0 +1,6 @@
+{
+  "ext": "py",
+  "watch": ["intg-hyperion/"],
+  "ignore": ["*.json", "__pycache__/*", "*.log", "config/"],
+  "exec": "python3 -u intg-hyperion/driver.py"
+}
