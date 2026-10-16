@@ -1,9 +1,9 @@
 {
-  "driver_id": "uc-intg-hyperion",
-  "version": "0.1.3",
+  "driver_id": "uc_intg_hyperion",
+  "version": "0.1.4",
   "min_core_api": "0.20.0",
   "name": { "en": "AudioControl Hyperion APR-16" },
-  "icon": "custom/wallpaper1.png",
+  "icon": "custom:wallpaper1.png",
   "description": {
     "en": "Integration driver for the AudioControl Hyperion APR-16 16-channel AV Processor"
   },
