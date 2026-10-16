@@ -24,7 +24,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
     Media player entity for the AudioControl Hyperion APR-16 processor.
     """
 
-    def __init__(self, device: Apr16):
+    def __init__(self, device_config, device: Apr16):
         # Initialize using attributes defined in the device class
         super().__init__(
             identifier=device.identifier,
