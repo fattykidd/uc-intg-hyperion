@@ -35,7 +35,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 media_player.Features.MUTE,
                 media_player.Features.SELECT_SOURCE,
             ],
-            supported_source_list=[
+            source_list=[
                 "HDMI 1",
                 "HDMI 2",
                 "HDMI 3",
