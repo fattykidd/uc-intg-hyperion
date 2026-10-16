@@ -23,6 +23,7 @@ class Apr16VolumeSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}_volume",
             f"{device_config.name} Volume",
+            [],
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "0.0",
@@ -56,6 +57,7 @@ class Apr16AudioFormatSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}_audio_format",
             f"{device_config.name} Audio Format",
+            [],
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "Unknown",
@@ -87,6 +89,7 @@ class Apr16VideoDetailSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}_video_detail",
             f"{device_config.name} Video Signal",
+            [],
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "No Signal",
