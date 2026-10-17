@@ -20,7 +20,10 @@ FEATURES = [
     Features.ON_OFF,
     Features.VOLUME,
     Features.MUTE,
+    Features.TOGGLE_MUTE,
     Features.SELECT_SOURCE,
+    Features.VOLUME_UP,
+    Features.VOLUME_DOWN,
 ]
 
 class Apr16MediaPlayer(MediaPlayerEntity):
@@ -66,6 +69,23 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                     success = await self._device.set_volume(float(params["volume"]))
                     return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
                 return StatusCodes.BAD_REQUEST
+
+            if cmd_id == Commands.VOLUME_UP:
+                    current_vol = await self._device.get_volume()
+                    new_vol = (current_vol or 0.0) + 1.0
+                    success = await self._device.set_volume(new_vol)
+                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+
+            if cmd_id == Commands.VOLUME_DOWN:
+                    current_vol = await self._device.get_volume()
+                    new_vol = (current_vol or 0.0) - 1.0
+                    success = await self._device.set_volume(new_vol)
+                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+
+            if cmd_id == Commands.TOGGLE_MUTE:
+                current_mute = await self._device.get_mute()
+                await self._device.set_mute(not current_mute)
+                return StatusCodes.OK
 
             if cmd_id == Commands.MUTE:
                 if params and "mute" in params:

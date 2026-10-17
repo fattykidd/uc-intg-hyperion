@@ -271,7 +271,8 @@ class Apr16(StatelessHTTPDevice):
         """
         _LOG.warning("[%s] Initiating system reboot...", self.log_id)
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self._base_url}/v1/reboot") as resp:
+            # Added json={} to match the API reference body specification[cite: 1]
+            async with session.post(f"{self._base_url}/v1/reboot", json={}) as resp:
                 resp.raise_for_status()
         _LOG.info("[%s] Reboot command sent successfully.", self.log_id)
 
@@ -325,6 +326,46 @@ class Apr16(StatelessHTTPDevice):
         else:
             await self.power_on()
 
+    async def get_host_ip(self) -> str:
+        """Get system host IP address via GET /v1/hostip[cite: 1]."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/v1/hostip") as resp:
+                resp.raise_for_status()
+                try:
+                    data = await resp.json()
+                    return data.get("ip", data.get("hostip", ""))
+                except Exception:
+                    text = await resp.text()
+                    return text.strip()       
+
+    async def trigger_hpd(self, port: int = 1) -> bool:
+        """Trigger HDMI hotplug detection via POST /v1/hdmi/output/hpd[cite: 1]."""
+        _LOG.debug("[%s] Triggering HDMI HPD for port: %s", self.log_id, port)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self._base_url}/v1/hdmi/output/hpd", json={"port": port}
+            ) as resp:
+                resp.raise_for_status()
+                return True
+
+    async def get_display_brightness(self) -> int:
+        """Get front panel LCD display brightness via GET /v1/displaybrightness[cite: 1]."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/v1/displaybrightness") as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return int(data.get("brightness", 0))
+
+    async def set_display_brightness(self, brightness: int) -> bool:
+        """Set front panel LCD display brightness via POST /v1/displaybrightness[cite: 1]."""
+        _LOG.debug("[%s] Setting display brightness to: %s", self.log_id, brightness)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self._base_url}/v1/displaybrightness", json={"brightness": brightness}
+            ) as resp:
+                resp.raise_for_status()
+                return True
+            
     # =========================================================================
     # Volume, Mute & Limits Operations
     # =========================================================================
@@ -476,6 +517,47 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
                 data = await resp.json()
                 return int(data.get("sample", data.get("rate", 0)))
+
+    async def get_input_bass(self, input_name: str) -> int:
+        """Get input bass level via GET /api/atlas/input/{input}/bass[cite: 1]."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/api/atlas/input/{input_name}/bass") as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return int(data.get("bass", 0)) 
+
+    async def set_input_bass(self, input_name: str, bass: int) -> bool:
+        """Set input bass level via POST /api/atlas/input/{input}/bass/{level}[cite: 1]."""
+        _LOG.debug(
+            "[%s] Setting input bass for %s to: %s", self.log_id, input_name, bass
+        )
+        async with aiohttp.ClientSession() as session:
+            # Note: the API reference defines this as a path parameter {level}[cite: 1]
+            async with session.post(
+                f"{self._base_url}/api/atlas/input/{input_name}/bass/{bass}"
+            ) as resp:
+                resp.raise_for_status()
+                return True
+
+    async def get_input_treble(self, input_name: str) -> int:
+        """Get input treble level via GET /api/atlas/input/{input}/treb[cite: 1]."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/api/atlas/input/{input_name}/treb") as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return int(data.get("treble", 0)) 
+
+    async def set_input_treble(self, input_name: str, treble: int) -> bool:
+        """Set input treble level via POST /api/atlas/input/{input}/treb/{level}[cite: 1]."""
+        _LOG.debug(
+            "[%s] Setting input treble for %s to: %s", self.log_id, input_name, treble
+        )
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self._base_url}/api/atlas/input/{input_name}/treb/{treble}"
+            ) as resp:
+                resp.raise_for_status()
+                return True                  
 
     async def get_audio_mode(self) -> str:
         """Get current audio processing mode (Stereo, Surround, etc.) via GET /v1/audiomode."""
