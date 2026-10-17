@@ -22,8 +22,7 @@ FEATURES = [
     Features.MUTE,
     Features.MUTE_TOGGLE,
     Features.SELECT_SOURCE,
-    Features.VOLUME_UP,
-    Features.VOLUME_DOWN,
+    Features.VOLUME_UP_DOWN,
 ]
 
 class Apr16MediaPlayer(MediaPlayerEntity):
