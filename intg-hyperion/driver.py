@@ -26,6 +26,8 @@ from button import (
     Apr16InputBassDownButton,
     Apr16InputTrebleUpButton,
     Apr16InputTrebleDownButton,
+    Apr16DisplayBrightnessUpButton,
+    Apr16DisplayBrightnessDownButton,
 )
 from sensor import (
     Apr16AudioFormatSensor,
@@ -67,6 +69,8 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16InputBassDownButton,
                 Apr16InputTrebleUpButton,
                 Apr16InputTrebleDownButton,
+                Apr16DisplayBrightnessUpButton,
+                Apr16DisplayBrightnessDownButton,
             ],
             driver_id="audiocontrol_hyperion_apr16",
             require_connection_before_registry=True,

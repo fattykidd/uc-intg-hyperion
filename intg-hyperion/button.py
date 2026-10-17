@@ -168,4 +168,56 @@ class Apr16InputTrebleDownButton(ButtonEntity):
             except Exception as err:
                 _LOG.error("[%s] Treble down command failed: %s", self.id, err)
                 return StatusCodes.SERVER_ERROR
-        return StatusCodes.NOT_IMPLEMENTED    
+        return StatusCodes.NOT_IMPLEMENTED
+
+
+class Apr16DisplayBrightnessUpButton(ButtonEntity):
+    """Button entity to increase front panel display brightness by 10%."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"button.{device_config.identifier}.brightness_up",
+            f"{device_config.name} Brightness +10%",
+            cmd_handler=self._handle_command,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
+        if cmd_id == Commands.PRESS:
+            try:
+                current = await self._device.get_display_brightness()
+                new_val = min(100, current + 10)
+                await self._device.set_display_brightness(new_val)
+                return StatusCodes.OK
+            except Exception as err:
+                _LOG.error("[%s] Brightness up command failed: %s", self.id, err)
+                return StatusCodes.SERVER_ERROR
+        return StatusCodes.NOT_IMPLEMENTED
+
+
+class Apr16DisplayBrightnessDownButton(ButtonEntity):
+    """Button entity to decrease front panel display brightness by 10%."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"button.{device_config.identifier}.brightness_down",
+            f"{device_config.name} Brightness -10%",
+            cmd_handler=self._handle_command,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
+        if cmd_id == Commands.PRESS:
+            try:
+                current = await self._device.get_display_brightness()
+                new_val = max(0, current - 10)
+                await self._device.set_display_brightness(new_val)
+                return StatusCodes.OK
+            except Exception as err:
+                _LOG.error("[%s] Brightness down command failed: %s", self.id, err)
+                return StatusCodes.SERVER_ERROR
+        return StatusCodes.NOT_IMPLEMENTED        
