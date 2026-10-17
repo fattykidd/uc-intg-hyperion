@@ -156,8 +156,11 @@ class Apr16AudioDetailSensor(SensorEntity):
             return
         try:
             details = await self._device.get_audio_detail()
-            # Extract a friendly summary string or fallback to formatted text
-            summary = details.get("summary", details.get("format", str(details)))
+            # If details is just a generic status dict, provide a clean fallback
+            if isinstance(details, dict) and "result" in details:
+                summary = "Active" if details.get("result") == "ok" else "Unknown"
+            else:
+                summary = details.get("summary", details.get("format", "Active"))
             self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(summary)})
         except Exception as err:
             _LOG.debug("[%s] Failed to update audio detail sensor: %s", self.identifier, err)
