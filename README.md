@@ -14,7 +14,7 @@ An integration driver for the **Unfolded Circle Remote 3** and **Remote Two**, w
   - Master volume control with smooth stepping and discrete level setting.
   - Master mute toggling.
   - Active input source switching (`HDMI 1–7`, `eARC`, `Coaxial 1–2`, `Optical 1–2`, `Analog 1–2`, `Dante`).
-  - Active sound mode and upmixer selection (`Direct`, `Stereo`, `All Channel Stereo`, `Dolby Surround`, `DTS Neural:X`, `Auro-3D`, `Native / Auto`).
+  - Active sound mode and upmixer selection (`Direct`, `Stereo`, `All Channel Stereo`, `Dolby Surround`, `DTS Neural:X`, `Native / Auto`).
   - Real-time metadata mapping for incoming stream details (format, sample rate, video mode).
 
 - **Granular System Controls**:
