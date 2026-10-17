@@ -81,6 +81,8 @@ uc-intg-hyperion:
 
 ## Acknowledgments & Attribution
 
-- **Framework**: Built on top of the Unfolded Circle Python driver framework ([`ucapi-framework`](https://github.com/JackJPowell/ucapi-framework)) created by **Jack Powell** ([@JackJPowell](https://github.com/JackJPowell)).
-- **Template**: Built using the the template made available and created by **Jack Powell** (['uc-intg-template'](https://github.com/JackJPowell/uc-intg-template))
-- **Development**: Developed with collaborative AI architecture and driver implementation support from **Gemini**.
+* **[Jack Powell](https://github.com/JackJPowell)** — For creating and maintaining the foundational Python driver framework ([`ucapi-framework`](https://github.com/JackJPowell/ucapi-framework)) and integration template ([`uc-intg-template`](https://github.com/JackJPowell/uc-intg-template)).
+* **[Unfolded Circle](https://unfoldedcircle.com/)** — For creating an exceptional smart remote ecosystem and flexible open API architecture.
+* **[AudioControl](https://www.audiocontrol.com/)** — For engineering high-end home theater processing hardware.
+* **The Open-Source Community** — To all the independent developers and hobbyists whose dedication fuels custom integrations and ecosystem expansion.
+* **Gemini** — For collaborative architecture, driver design, and implementation support throughout development.
