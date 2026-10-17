@@ -22,7 +22,7 @@ class Apr16AudioModeSelect(SelectEntity):
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            f"select.{device_config.identifier}_audio_mode",
+            f"select.{device_config.identifier}.audio_mode",
             f"{device_config.name} Audio Mode",
             {
                 Attributes.STATE: States.ON,

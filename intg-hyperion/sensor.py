@@ -21,7 +21,7 @@ class Apr16VolumeSensor(SensorEntity):
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            f"sensor.{device_config.identifier}_volume",
+            f"sensor.{device_config.identifier}.volume",
             f"{device_config.name} Volume",
             [],
             {
@@ -55,7 +55,7 @@ class Apr16AudioFormatSensor(SensorEntity):
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            f"sensor.{device_config.identifier}_audio_format",
+            f"sensor.{device_config.identifier}.audio_format",
             f"{device_config.name} Audio Format",
             [],
             {
@@ -87,7 +87,7 @@ class Apr16VideoDetailSensor(SensorEntity):
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            f"sensor.{device_config.identifier}_video_detail",
+            f"sensor.{device_config.identifier}.video_detail",
             f"{device_config.name} Video Signal",
             [],
             {
