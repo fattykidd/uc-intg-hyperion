@@ -20,7 +20,7 @@ FEATURES = [
     Features.ON_OFF,
     Features.VOLUME,
     Features.MUTE,
-    Features.TOGGLE_MUTE,
+    Features.MUTE_TOGGLE,
     Features.SELECT_SOURCE,
     Features.VOLUME_UP,
     Features.VOLUME_DOWN,
@@ -82,7 +82,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                     success = await self._device.set_volume(new_vol)
                     return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
 
-            if cmd_id == Commands.TOGGLE_MUTE:
+            if cmd_id == Commands.MUTE_TOGGLE:
                 current_mute = await self._device.get_mute()
                 await self._device.set_mute(not current_mute)
                 return StatusCodes.OK
