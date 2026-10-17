@@ -6,13 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g nodemon
-
 COPY requirements.txt requirements.txt
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 RUN mkdir /config
 
 ADD . .
 
-# Nodemon automatically detects nodemon.json in /app
-CMD ["nodemon", "--config", "nodemon.json", "--exec", "python3 -u intg-hyperion/driver.py"]
+# Explicitly pass watch extensions and ignore patterns inline
+CMD ["python3", "-u", "intg-hyperion/driver.py"]
