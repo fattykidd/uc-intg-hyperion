@@ -1,4 +1,4 @@
-![Screenshot 1](assets/Wallpaper2.png)
+![Screenshot 1](assets/hyperion.png)
 # Unfolded Circle Remote Driver for the AudioControl Hyperion APR-16  (Pre-Release)
 
 [![GitHub Release](https://img.shields.io/github/v/release/fattykidd/uc-intg-hyperion?style=flat-square&color=blue)](https://github.com/fattykidd/uc-intg-hyperion/releases)
