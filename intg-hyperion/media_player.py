@@ -44,7 +44,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.SOURCE_LIST: [
                     "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7",
                     "Digital 1", "Digital 2", "Digital 3", "Digital 4",
-                    "Analog 1", "Analog 2", "Analog 3", "Analog 4", "Analog 5"
+                    "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
                 ],
             },
             device_class=DeviceClasses.RECEIVER,
@@ -58,28 +58,30 @@ class Apr16MediaPlayer(MediaPlayerEntity):
 
         try:
             if cmd_id == Commands.ON:
-                return StatusCodes.OK if await self._device.power_on() else StatusCodes.SERVER_ERROR
+                await self._device.power_on()
+                return StatusCodes.OK
 
             if cmd_id == Commands.OFF:
-                return StatusCodes.OK if await self._device.power_off() else StatusCodes.SERVER_ERROR
+                await self._device.power_off()
+                return StatusCodes.OK
 
             if cmd_id == Commands.VOLUME:
                 if params and "volume" in params:
-                    success = await self._device.set_volume(float(params["volume"]))
-                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+                    await self._device.set_volume(float(params["volume"]))
+                    return StatusCodes.OK
                 return StatusCodes.BAD_REQUEST
 
             if cmd_id == Commands.VOLUME_UP:
-                    current_vol = await self._device.get_volume()
-                    new_vol = (current_vol or 0.0) + 1.0
-                    success = await self._device.set_volume(new_vol)
-                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+                current_vol = await self._device.get_volume()
+                new_vol = (current_vol or 0.0) + 1.0
+                await self._device.set_volume(new_vol)
+                return StatusCodes.OK
 
             if cmd_id == Commands.VOLUME_DOWN:
-                    current_vol = await self._device.get_volume()
-                    new_vol = (current_vol or 0.0) - 1.0
-                    success = await self._device.set_volume(new_vol)
-                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+                current_vol = await self._device.get_volume()
+                new_vol = (current_vol or 0.0) - 1.0
+                await self._device.set_volume(new_vol)
+                return StatusCodes.OK
 
             if cmd_id == Commands.MUTE_TOGGLE:
                 current_mute = await self._device.get_mute()
@@ -88,14 +90,14 @@ class Apr16MediaPlayer(MediaPlayerEntity):
 
             if cmd_id == Commands.MUTE:
                 if params and "mute" in params:
-                    success = await self._device.set_mute(bool(params["mute"]))
-                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+                    await self._device.set_mute(bool(params["mute"]))
+                    return StatusCodes.OK
                 return StatusCodes.BAD_REQUEST
 
             if cmd_id == Commands.SELECT_SOURCE:
                 if params and "source" in params:
-                    success = await self._device.set_active_input(params["source"])
-                    return StatusCodes.OK if success else StatusCodes.SERVER_ERROR
+                    await self._device.set_active_input(params["source"])
+                    return StatusCodes.OK
                 return StatusCodes.BAD_REQUEST
 
             return StatusCodes.NOT_IMPLEMENTED

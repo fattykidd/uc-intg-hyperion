@@ -72,7 +72,7 @@ class Apr16(StatelessHTTPDevice):
                     "HDMI 4",
                     "HDMI 5",
                     "HDMI 6",
-                    "HDMI 7",
+                    "HDMI 7",                    
                     "Digital 1",
                     "Digital 2",
                     "Digital 3",
@@ -80,8 +80,8 @@ class Apr16(StatelessHTTPDevice):
                     "Analog 1",
                     "Analog 2",
                     "Analog 3",
-                    "Analog 4",
-                    "Analog 5",
+                    "Dante",
+                    "eArc",
                 ],
             )
         }
@@ -159,20 +159,20 @@ class Apr16(StatelessHTTPDevice):
                 async with session.get(f"{self._base_url}/v1/power") as resp:
                     resp.raise_for_status()
                     data = await resp.json()
-                    power_state = data.get("state", "STANDBY")
-                    is_on = power_state.upper() == "ON"
+                    power_state = str(data.get("state", "0"))
+                    is_on = power_state == "1"
 
                 # Fetch Volume
                 async with session.get(f"{self._base_url}/v1/vol") as resp:
                     resp.raise_for_status()
                     vol_data = await resp.json()
-                    current_vol = float(vol_data.get("master", 0.0))
+                    current_vol = float(vol_data.get("level", 0.0))
 
                 # Fetch Mute
                 async with session.get(f"{self._base_url}/v1/mute") as resp:
                     resp.raise_for_status()
                     mute_data = await resp.json()
-                    current_mute = bool(mute_data.get("mute", False))
+                    current_mute = bool(mute_data.get("state", False))
 
                 # Fetch Active Input
                 async with session.get(
@@ -254,16 +254,31 @@ class Apr16(StatelessHTTPDevice):
     # System & Power Operations
     # =========================================================================
 
+    async def get_version(self) -> dict[str, Any]:
+        """Fetch firmware version and build metadata via GET /v1/version."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/v1/version") as resp:
+                resp.raise_for_status()
+                return await resp.json()
+
+    async def get_mac_address(self) -> str:
+        """Fetch hardware MAC address via GET /v1/mac."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self._base_url}/v1/mac") as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return data.get("mac", "00:00:00:00:00:00")
+    
     async def get_system_power(self) -> str:
         """
         Get system power state from GET /v1/power.
-        Returns current power state (e.g., 'ON', 'STANDBY').
+        Returns current power state ('1' for on, '0' for standby).
         """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{self._base_url}/v1/power") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return data.get("state", "STANDBY")
+                return str(data.get("state", "0"))
 
     async def reboot(self) -> None:
         """
@@ -291,7 +306,7 @@ class Apr16(StatelessHTTPDevice):
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/power", json={"state": "ON"}
+                f"{self._base_url}/v1/power", json={"state": "1"}
             ) as resp:
                 resp.raise_for_status()
 
@@ -307,7 +322,7 @@ class Apr16(StatelessHTTPDevice):
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/power", json={"state": "STANDBY"}
+                f"{self._base_url}/v1/power", json={"state": "0"}
             ) as resp:
                 resp.raise_for_status()
 
@@ -338,12 +353,12 @@ class Apr16(StatelessHTTPDevice):
                     text = await resp.text()
                     return text.strip()       
 
-    async def trigger_hpd(self, port: int = 1) -> bool:
-        """Trigger HDMI hotplug detection via POST /v1/hdmi/output/hpd[cite: 1]."""
-        _LOG.debug("[%s] Triggering HDMI HPD for port: %s", self.log_id, port)
+    async def trigger_hpd(self, state: bool = True) -> bool:
+        """Trigger HDMI hotplug detection via POST /v1/hdmi/output/hpd."""
+        _LOG.debug("[%s] Triggering HDMI HPD with state: %s", self.log_id, state)
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/hdmi/output/hpd", json={"port": port}
+                f"{self._base_url}/v1/hdmi/output/hpd", json={"state": state}
             ) as resp:
                 resp.raise_for_status()
                 return True
@@ -371,19 +386,19 @@ class Apr16(StatelessHTTPDevice):
     # =========================================================================
 
     async def get_volume(self) -> float:
-        """Get master volume level (0-100) via GET /v1/vol."""
+        """Get master volume level via GET /v1/vol."""
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{self._base_url}/v1/vol") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return float(data.get("master", data.get("volume", 0.0)))
+                return float(data.get("level", 0.0))
 
     async def set_volume(self, volume: float) -> None:
-        """Set master volume level (0-100) via POST /v1/vol."""
+        """Set master volume level via POST /v1/vol."""
         _LOG.debug("[%s] Setting master volume to: %s", self.log_id, volume)
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/vol", json={"master": volume}
+                f"{self._base_url}/v1/vol", json={"level": volume}
             ) as resp:
                 resp.raise_for_status()
 
@@ -397,14 +412,14 @@ class Apr16(StatelessHTTPDevice):
             async with session.get(f"{self._base_url}/v1/mute") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return bool(data.get("mute", data.get("muted", False)))
+                return bool(data.get("state", False))
 
     async def set_mute(self, muted: bool) -> None:
         """Set master mute status via POST /v1/mute."""
         _LOG.debug("[%s] Setting mute to: %s", self.log_id, muted)
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/mute", json={"mute": muted}
+                f"{self._base_url}/v1/mute", json={"state": muted}
             ) as resp:
                 resp.raise_for_status()
 
@@ -413,18 +428,18 @@ class Apr16(StatelessHTTPDevice):
         self.push_update()
 
     async def get_max_volume(self) -> float:
-        """Get maximum volume limit (0-100) via GET /v1/maxvol."""
+        """Get maximum volume limit via GET /v1/maxvol."""
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{self._base_url}/v1/maxvol") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return float(data.get("max", data.get("maxvol", 100.0)))
+                return float(data.get("level", 100.0))
 
     async def set_max_volume(self, max_vol: float) -> None:
-        """Set maximum volume limit (0-100) via POST /v1/maxvol."""
+        """Set maximum volume limit via POST /v1/maxvol."""
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/maxvol", json={"max": max_vol}
+                f"{self._base_url}/v1/maxvol", json={"level": max_vol}
             ) as resp:
                 resp.raise_for_status()
 
@@ -434,13 +449,13 @@ class Apr16(StatelessHTTPDevice):
             async with session.get(f"{self._base_url}/v1/onvol") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return float(data.get("onvol", data.get("volume", 0.0)))
+                return float(data.get("level", 0.0))
 
     async def set_power_on_volume(self, on_vol: float) -> None:
         """Set default startup volume level via POST /v1/onvol."""
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/v1/onvol", json={"onvol": on_vol}
+                f"{self._base_url}/v1/onvol", json={"level": on_vol}
             ) as resp:
                 resp.raise_for_status()
 
@@ -465,7 +480,7 @@ class Apr16(StatelessHTTPDevice):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self._base_url}/api/atlas/input/active",
-                json={"source": source},
+                json={"input": source},
             ) as resp:
                 resp.raise_for_status()
 
@@ -519,42 +534,43 @@ class Apr16(StatelessHTTPDevice):
                 return int(data.get("sample", data.get("rate", 0)))
 
     async def get_input_bass(self, input_name: str) -> int:
-        """Get input bass level via GET /api/atlas/input/{input}/bass[cite: 1]."""
+        """Get input bass level via GET /api/atlas/input/{input}/bass."""
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{self._base_url}/api/atlas/input/{input_name}/bass") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return int(data.get("bass", 0)) 
+                return int(data.get("level", 0))
 
     async def set_input_bass(self, input_name: str, bass: int) -> bool:
-        """Set input bass level via POST /api/atlas/input/{input}/bass/{level}[cite: 1]."""
+        """Set input bass level via POST /api/atlas/input/{input}/bass/{level}."""
         _LOG.debug(
             "[%s] Setting input bass for %s to: %s", self.log_id, input_name, bass
         )
         async with aiohttp.ClientSession() as session:
-            # Note: the API reference defines this as a path parameter {level}[cite: 1]
             async with session.post(
-                f"{self._base_url}/api/atlas/input/{input_name}/bass/{bass}"
+                f"{self._base_url}/api/atlas/input/{input_name}/bass/{bass}",
+                json={"inputId": 0}
             ) as resp:
                 resp.raise_for_status()
                 return True
 
     async def get_input_treble(self, input_name: str) -> int:
-        """Get input treble level via GET /api/atlas/input/{input}/treb[cite: 1]."""
+        """Get input treble level via GET /api/atlas/input/{input}/treb."""
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{self._base_url}/api/atlas/input/{input_name}/treb") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return int(data.get("treble", 0)) 
+                return int(data.get("level", 0))
 
     async def set_input_treble(self, input_name: str, treble: int) -> bool:
-        """Set input treble level via POST /api/atlas/input/{input}/treb/{level}[cite: 1]."""
+        """Set input treble level via POST /api/atlas/input/{input}/treb/{level}."""
         _LOG.debug(
             "[%s] Setting input treble for %s to: %s", self.log_id, input_name, treble
         )
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self._base_url}/api/atlas/input/{input_name}/treb/{treble}"
+                f"{self._base_url}/api/atlas/input/{input_name}/treb/{treble}",
+                json={"inputId": 0}
             ) as resp:
                 resp.raise_for_status()
                 return True                  

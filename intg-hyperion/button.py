@@ -221,3 +221,60 @@ class Apr16DisplayBrightnessDownButton(ButtonEntity):
                 _LOG.error("[%s] Brightness down command failed: %s", self.id, err)
                 return StatusCodes.SERVER_ERROR
         return StatusCodes.NOT_IMPLEMENTED        
+
+class Apr16VolumeUpButton(ButtonEntity):
+    """Button entity to increase volume by 1 dB (using local cache)."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"button.{device_config.identifier}.volume_up",
+            f"{device_config.name} Volume +1dB",
+            cmd_handler=self._handle_command,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
+        if cmd_id == Commands.PRESS:
+            try:
+                # Grab volume from local media player attributes cache to avoid an extra HTTP GET
+                attrs = self._device.get_media_player_attributes(self._device.identifier)
+                current = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 0.0
+                
+                new_val = min(100.0, current + 1.0)
+                await self._device.set_volume(new_val)
+                return StatusCodes.OK
+            except Exception as err:
+                _LOG.error("[%s] Volume up command failed: %s", self.id, err)
+                return StatusCodes.SERVER_ERROR
+        return StatusCodes.NOT_IMPLEMENTED
+
+
+class Apr16VolumeDownButton(ButtonEntity):
+    """Button entity to decrease volume by 1 dB (using local cache)."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"button.{device_config.identifier}.volume_down",
+            f"{device_config.name} Volume -1dB",
+            cmd_handler=self._handle_command,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
+        if cmd_id == Commands.PRESS:
+            try:
+                # Grab volume from local media player attributes cache to avoid an extra HTTP GET
+                attrs = self._device.get_media_player_attributes(self._device.identifier)
+                current = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 0.0
+                
+                new_val = max(0.0, current - 1.0)
+                await self._device.set_volume(new_val)
+                return StatusCodes.OK
+            except Exception as err:
+                _LOG.error("[%s] Volume down command failed: %s", self.id, err)
+                return StatusCodes.SERVER_ERROR
+        return StatusCodes.NOT_IMPLEMENTED

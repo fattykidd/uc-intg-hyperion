@@ -16,20 +16,20 @@ from device import Apr16
 _LOG = logging.getLogger(__name__)
 
 
-class Apr16VolumeSensor(SensorEntity):
-    """Sensor entity for displaying the master volume level."""
+class Apr16AbsoluteVolumeSensor(SensorEntity):
+    """Sensor entity for displaying the absolute volume level (0-100% scale)."""
 
     def __init__(self, device_config, device: Apr16):
         super().__init__(
-            f"sensor.{device_config.identifier}.volume",
-            f"{device_config.name} Volume",
+            f"sensor.{device_config.identifier}.volume_absolute",
+            f"{device_config.name} Absolute Volume",
             [],
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "0.0",
             },
             device_class=DeviceClasses.CUSTOM,
-            options={Options.CUSTOM_UNIT: "dB"},
+            options={Options.CUSTOM_UNIT: "%"},
         )
         self._device = device
         self._device_config = device_config
@@ -47,9 +47,43 @@ class Apr16VolumeSensor(SensorEntity):
                 Attributes.VALUE: vol_str,
             })
         except Exception as err:
-            _LOG.debug("[%s] Failed to update volume sensor: %s", self.identifier, err)
+            _LOG.debug("[%s] Failed to update absolute volume sensor: %s", self.identifier, err)
 
 
+class Apr16RelativeVolumeSensor(SensorEntity):
+    """Sensor entity for displaying the relative volume level (dB scale)."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.volume_relative",
+            f"{device_config.name} Relative Volume",
+            [],
+            {
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: "0.0",
+            },
+            device_class=DeviceClasses.CUSTOM,
+            options={Options.CUSTOM_UNIT: "dB"},
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            vol_pct = await self._device.get_volume()
+            # Convert absolute percentage to relative dB using our device helper
+            db_val = self._device.percentage_to_db(float(vol_pct)) if hasattr(self._device, "percentage_to_db") else float(vol_pct)
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: f"{db_val:.1f}",
+            })
+        except Exception as err:
+            _LOG.debug("[%s] Failed to update relative volume sensor: %s", self.identifier, err)
+            
 class Apr16AudioFormatSensor(SensorEntity):
     """Sensor entity for displaying the active audio codec and format."""
 
