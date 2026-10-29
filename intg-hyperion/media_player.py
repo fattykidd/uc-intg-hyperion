@@ -72,7 +72,9 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
                 Attributes.MUTED: attrs.MUTED,
                 Attributes.SOURCE: attrs.SOURCE,
-                Attributes.SOUND_MODE: getattr(attrs, "SOUND_MODE", ""),
+                Attributes.SOURCE_LIST: getattr(attrs, "SOURCE_LIST", []),
+                Attributes.SOUND_MODE: getattr(attrs, "SOUND_MODE", "Stereo"),
+                Attributes.SOUND_MODE_LIST: getattr(attrs, "SOUND_MODE_LIST", []),
             })
 
     async def _handle_command(
