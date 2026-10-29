@@ -23,6 +23,7 @@ FEATURES = [
     Features.MUTE_TOGGLE,
     Features.SELECT_SOURCE,
     Features.VOLUME_UP_DOWN,
+    Features.SELECT_SOUND_MODE,
 ]
 
 class Apr16MediaPlayer(MediaPlayerEntity):
@@ -70,7 +71,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.STATE: attrs.STATE,
                 Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
                 Attributes.MUTED: attrs.MUTED,
-                Attributes.SOURCE: getattr(attrs, "SOURCE", ""),
+                Attributes.SOURCE: attrs.SOURCE,
                 Attributes.SOUND_MODE: getattr(attrs, "SOUND_MODE", ""),
             })
 
