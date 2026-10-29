@@ -89,11 +89,15 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 return StatusCodes.BAD_REQUEST
 
             if cmd_id == Commands.VOLUME_UP:
-                await self._device.change_volume(1.0)
+                current_vol = await self._device.get_volume()
+                new_vol = max(0.0, min(100.0, (current_vol or 0.0) + 1.0))
+                await self._device.set_volume(int(round(new_vol)))
                 return StatusCodes.OK
 
             if cmd_id == Commands.VOLUME_DOWN:
-                await self._device.change_volume(-1.0)
+                current_vol = await self._device.get_volume()
+                new_vol = max(0.0, min(100.0, (current_vol or 0.0) - 1.0))
+                await self._device.set_volume(int(round(new_vol)))
                 return StatusCodes.OK
 
             if cmd_id == Commands.MUTE_TOGGLE:
