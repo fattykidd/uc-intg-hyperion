@@ -107,6 +107,16 @@ class Apr16(StatelessHTTPDevice):
                     "Dante",
                     "eArc",
                 ],
+                SOUND_MODE="",
+                SOUND_MODE_LIST=[
+                    "Direct Mode",
+                    "DTS Neural:X", 
+                    "Stereo", 
+                    "All Channel Stereo",
+                    "Dolby Mode", 
+                    "Native", 
+                    "Dolby Surround",
+                ]
             )
         }
 
@@ -248,6 +258,17 @@ class Apr16(StatelessHTTPDevice):
                         vid_err,
                     )
 
+                # Fetch Audio Mode / Upmixer
+                try:
+                    async with session.get(f"{self._base_url}/v1/audiomode") as mode_resp:
+                        if mode_resp.status == 200:
+                            mode_data = await mode_resp.json()
+                            current_mode = str(mode_data.get("mode", mode_data.get("audiomode", "Stereo")))
+                        else:
+                            current_mode = "Stereo"
+                except Exception:
+                    current_mode = "Stereo"
+
             # Update attributes
             if self.identifier in self._media_player_attributes:
                 attrs = self._media_player_attributes[self.identifier]
@@ -259,6 +280,7 @@ class Apr16(StatelessHTTPDevice):
                 attrs.VOLUME = current_vol
                 attrs.MUTED = current_mute
                 attrs.SOURCE = current_source
+                attrs.SOUND_MODE = current_mode
 
             _LOG.debug(
                 "[%s] Connection verified. State: %s, Vol: %s, Mute: %s",
@@ -679,14 +701,16 @@ class Apr16(StatelessHTTPDevice):
 
     async def set_audio_mode(self, mode: str) -> None:
         """Configure audio processing mode via POST /v1/audiomode."""
-        _LOG.debug(
-            "[%s] Setting audio processing mode to: %s", self.log_id, mode
-        )
+        _LOG.debug("[%s] Setting audio processing mode to: %s", self.log_id, mode)
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self._base_url}/v1/audiomode", json={"mode": mode}
             ) as resp:
                 resp.raise_for_status()
+
+        if self.identifier in self._media_player_attributes:
+            self._media_player_attributes[self.identifier].SOUND_MODE = mode
+        self.push_update()
 
     # =========================================================================
     # Command Sending
