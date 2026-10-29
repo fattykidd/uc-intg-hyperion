@@ -86,7 +86,7 @@ class Apr16(StatelessHTTPDevice):
         self._media_player_attributes: dict[str, MediaPlayerAttributes] = {
             device_config.identifier: MediaPlayerAttributes(
                 STATE=media_player.States.OFF,
-                VOLUME=0.0,
+                VOLUME=0,
                 MUTED=False,
                 SOURCE=None,
                 SOURCE_LIST=[
@@ -190,7 +190,7 @@ class Apr16(StatelessHTTPDevice):
                 async with session.get(f"{self._base_url}/v1/vol") as resp:
                     resp.raise_for_status()
                     vol_data = await resp.json()
-                    current_vol = float(vol_data.get("level", 0.0))
+                    current_vol = int(round(float(vol_data.get("level", 0))))
 
                 # Fetch Mute
                 async with session.get(f"{self._base_url}/v1/mute") as resp:
@@ -472,7 +472,7 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
 
         if self.identifier in self._media_player_attributes:
-            self._media_player_attributes[self.identifier].VOLUME = volume
+            self._media_player_attributes[self.identifier].VOLUME = int(round(volume))  # <-- Cast to int
         self.push_update()
 
     async def get_mute(self) -> bool:
