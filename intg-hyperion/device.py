@@ -463,11 +463,36 @@ class Apr16(StatelessHTTPDevice):
                 return float(data.get("level", 0.0))
 
     async def set_volume(self, volume: float) -> None:
-        """Set master volume level via POST /v1/vol."""
+        """Set master volume level via POST /v1/vol (Optimistic)."""
         _LOG.debug("[%s] Setting master volume to: %s", self.log_id, volume)
+        
+        # 1. Optimistically update local cache and push to UI immediately
+        if self.identifier in self._media_player_attributes:
+            self._media_player_attributes[self.identifier].VOLUME = int(round(volume))
+        self.push_update()
+
+        # 2. Fire network request asynchronously
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self._base_url}/v1/vol", json={"level": volume}
+            ) as resp:
+                resp.raise_for_status()
+
+    async def change_volume(self, delta: float) -> None:
+        """Optimistically step volume up or down using local cache."""
+        attrs = self._media_player_attributes.get(self.identifier)
+        current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 0.0
+        new_vol = max(0.0, min(100.0, current_vol + delta))
+
+        # Optimistically update and push immediately
+        if attrs:
+            attrs.VOLUME = int(round(new_vol))
+        self.push_update()
+
+        # Send command to hardware
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self._base_url}/v1/vol", json={"level": new_vol}
             ) as resp:
                 resp.raise_for_status()
 
