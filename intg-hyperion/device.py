@@ -9,7 +9,7 @@ sends commands, and tracks device state.
 
 import logging
 import aiohttp
-from aiohttp import ClientError, TimeoutError
+from aiohttp import ClientError
 from asyncio import AbstractEventLoop
 from typing import Any
 import aiohttp
