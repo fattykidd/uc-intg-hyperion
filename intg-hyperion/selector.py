@@ -100,7 +100,6 @@ class Apr16DiracSlotSelect(SelectEntity):
     """
     Select entity for changing active Dirac Live filter slots.
     """
-
     def __init__(self, device_config, device: Apr16):
         super().__init__(
             f"select.{device_config.identifier}.dirac_slot",
@@ -119,16 +118,17 @@ class Apr16DiracSlotSelect(SelectEntity):
     async def sync_state(self) -> None:
         """Synchronize active Dirac slot state with the device via port 80 binary query."""
         try:
-            # Assumes async_get_dirac_active_slot is available on your device client/Apr16 class
             raw_slot = await self._device.async_get_dirac_active_slot()
             display_option = API_TO_UI_DIRAC.get(raw_slot, "Slot 0 (Default/Bypass)")
             self.update({
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: display_option,
             })
+            await self.push_update()
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
+            await self.push_update()
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
@@ -136,19 +136,19 @@ class Apr16DiracSlotSelect(SelectEntity):
         """Handle command callbacks from the remote UI for Dirac slot switching."""
         if cmd_id != Commands.SELECT_OPTION:
             return StatusCodes.NOT_IMPLEMENTED
-        
+
         option = params.get("option") if params else None
         if not option or option not in DIRAC_SLOT_MAPPING:
             return StatusCodes.BAD_REQUEST
 
         slot_idx = DIRAC_SLOT_MAPPING[option]
         _LOG.debug("[%s] Selecting Dirac slot: %s (Index: %d)", self._device.log_id, option, slot_idx)
-        
+
         try:
             success = await self._device.async_set_dirac_filter_slot(slot_idx)
             if not success:
                 return StatusCodes.SERVER_ERROR
-                
+
             self.update({
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: option,

@@ -773,9 +773,9 @@ class Apr16(StatelessHTTPDevice):
             case _:
                 _LOG.warning("Unknown command: %s", command)
 
-    # ===========================================================================
-    # Dirac Slot Management via Atlas Binary RPC (Port 80)
-    # ===========================================================================
+# ===========================================================================
+# Dirac Slot Management via Atlas Binary RPC (Port 80)
+# ===========================================================================
 
 class HyperionAtlasClient:
     """Client for handling port 80 Atlas binary RPC and Dirac control requests."""
@@ -787,10 +787,8 @@ class HyperionAtlasClient:
 
     async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
         """Send a direct binary protocol request to the port 80 Atlas service."""
-        # Extract host base from self._base_url or default to port 80 explicitly
-        host_ip = getattr(self, "host", "192.168.50.170")
-        if hasattr(self, "_base_url"):
-            # Strip scheme/port from _base_url if needed to ensure port 80
+        host_ip = self.host
+        if hasattr(self, "_base_url") and self._base_url:
             from urllib.parse import urlparse
             parsed = urlparse(self._base_url)
             if parsed.hostname:
@@ -812,8 +810,10 @@ class HyperionAtlasClient:
             "atlas_served_asset_session": getattr(self, "session_cookie", "session_active"),
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        # Utilizing the passed session if available, falling back to a new one if needed
+        session_obj = getattr(self, "_session", None)
+        if session_obj and not session_obj.closed:
+            async with session_obj.post(
                 url, 
                 headers=headers, 
                 cookies=cookies, 
@@ -825,6 +825,20 @@ class HyperionAtlasClient:
                     _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
                 response.raise_for_status()
                 return response_text
+        else:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, 
+                    headers=headers, 
+                    cookies=cookies, 
+                    data=inner_payload, 
+                    timeout=10
+                ) as response:
+                    response_text = await response.text()
+                    if response.status >= 400:
+                        _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
+                    response.raise_for_status()
+                    return response_text
 
     async def async_get_dirac_filter_slots(self) -> str:
         """Fetch raw Dirac filter slots data."""
@@ -836,8 +850,8 @@ class HyperionAtlasClient:
 
     async def async_get_dirac_active_slot(self) -> int:
         """Query the hardware live for the active Dirac slot index via binary response parsing."""
-        host_ip = "192.168.50.170"
-        if hasattr(self, "_base_url"):
+        host_ip = self.host
+        if hasattr(self, "_base_url") and self._base_url:
             from urllib.parse import urlparse
             parsed = urlparse(self._base_url)
             if parsed.hostname:
@@ -850,14 +864,24 @@ class HyperionAtlasClient:
         }
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+            session_obj = getattr(self, "_session", None)
+            if session_obj and not session_obj.closed:
+                async with session_obj.post(url, headers=headers, data=b"", timeout=2.0) as response:
                     body = await response.read()
                     if response.status == 200:
                         if not body:
                             return 0
                         if len(body) >= 2 and body[0] == 0x08:
                             return body[1]
+            else:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                        body = await response.read()
+                        if response.status == 200:
+                            if not body:
+                                return 0
+                            if len(body) >= 2 and body[0] == 0x08:
+                                return body[1]
         except (TimeoutError, ClientError, OSError, KeyError, ValueError) as err:
             _LOG.debug("GetDiracActiveSlot failed: %s", err)
             
