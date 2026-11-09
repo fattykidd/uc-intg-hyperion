@@ -18,7 +18,10 @@ from ucapi_framework import (
 from config import APR16Config
 from device import Apr16
 from media_player import Apr16MediaPlayer
-from selector import Apr16AudioModeSelect
+from selector import (
+    Apr16AudioModeSelect,
+    Apr16DiracSlotSelect,
+)
 from button import (
     Apr16RebootButton, 
     Apr16HpdButton,
@@ -42,7 +45,10 @@ from sensor import (
     Apr16HostIpSensor,
     Apr16InputBassSensor,
     Apr16InputTrebleSensor,
+    Apr16DiracSlotSensor,
 )
+
+from switch import Apr16DiracFilteringSwitch
 from setup_flow import HyperionSetupFlow
 
 _LOG = logging.getLogger(__name__)
@@ -57,6 +63,9 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
             entity_classes=[
                 Apr16MediaPlayer,
                 Apr16AudioModeSelect,
+                Apr16DiracSlotSelect,
+                Apr16DiracFilteringSwitch,
+                Apr16DiracSlotSensor,
                 Apr16AudioFormatSensor,
                 Apr16VideoDetailSensor,
                 Apr16AbsoluteVolumeSensor,

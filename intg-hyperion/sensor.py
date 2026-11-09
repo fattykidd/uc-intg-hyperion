@@ -15,6 +15,11 @@ from device import Apr16
 
 _LOG = logging.getLogger(__name__)
 
+SLOT_DISPLAY_NAMES = {
+    0: "Slot 0 (Default/Bypass)",
+    1: "Slot 1",
+    2: "Slot 2",
+}
 
 class Apr16AbsoluteVolumeSensor(SensorEntity):
     """Sensor entity for displaying the absolute volume level (0-100% scale)."""
@@ -321,3 +326,37 @@ class Apr16VideoDetailSensor(SensorEntity):
             })
         except Exception as err:
             _LOG.debug("[%s] Failed to update video detail sensor: %s", self.identifier, err)
+
+class Apr16DiracSlotSensor(SensorEntity):
+    """
+    Sensor entity reporting active Dirac filter slot index and display name.
+    """
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.dirac_active_slot",
+            f"{device_config.name} Active Dirac Slot",
+            {
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: "Slot 0 (Default/Bypass)",
+            },
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        """Synchronize active Dirac slot sensor state with the device."""
+        try:
+            slot_idx = await self._device.async_get_dirac_active_slot()
+            display_value = SLOT_DISPLAY_NAMES.get(slot_idx, f"Slot {slot_idx}")
+            
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: display_value,
+            })
+            await self.push_update()
+        except Exception as err:
+            _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self._device.log_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            await self.push_update()
