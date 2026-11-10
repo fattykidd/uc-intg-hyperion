@@ -153,7 +153,6 @@ class Apr16DiracSlotSelect(SelectEntity):
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: option,
             })
-            await self.push_update()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set Dirac slot: %s", self._device.log_id, err)
