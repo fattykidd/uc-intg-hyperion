@@ -23,9 +23,9 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
         super().__init__(
             f"switch.{device_config.identifier}.dirac_filtering",
             f"{device_config.name} Dirac Filtering",
-            {
-                Attributes.STATE: States.ON,
-            },
+            attributes={
+            Attributes.STATE: States.ON,
+        },
             cmd_handler=self._handle_command,
         )
         self._device = device
