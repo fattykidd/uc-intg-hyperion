@@ -356,8 +356,6 @@ class Apr16DiracSlotSensor(SensorEntity):
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: display_value,
             })
-            await self.push_update()
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
-            await self.push_update()
