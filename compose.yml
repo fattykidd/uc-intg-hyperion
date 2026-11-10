@@ -22,9 +22,10 @@ services:
      build:
        context: .
        dockerfile: Dockerfile
+     working_dir: /app/uc-intg-hyperion
      hostname: hyperion
      # nodemon watches for file changes and auto-restarts
-     command: bash -c "UC_INTEGRATION_INTERFACE=$(hostname -i) nodemon -e py,json --exec 'python3 -u' intg-hyperion/driver.py"
+     command: python3 -u intg-hyperion/driver.py
      volumes:
        - ../:/app
 
