@@ -52,15 +52,15 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
-    ) -> StatusCodes:
+) -> StatusCodes:
         """Handle command callbacks from the remote UI for master Dirac filtering toggle."""
-        if cmd_id not in (Commands.TURN_ON, Commands.TURN_OFF, Commands.TOGGLE):
+        if cmd_id not in ("on", "off", "toggle"):
             return StatusCodes.NOT_IMPLEMENTED
 
         target_state = True
-        if cmd_id == Commands.TURN_OFF:
+        if cmd_id == "off":
             target_state = False
-        elif cmd_id == Commands.TOGGLE:
+        elif cmd_id == "toggle":
             current_state = self.get_attribute(Attributes.STATE) == States.ON
             target_state = not current_state
 
