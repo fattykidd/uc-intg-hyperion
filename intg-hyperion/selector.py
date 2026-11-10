@@ -135,8 +135,7 @@ class Apr16DiracSlotSelect(SelectEntity):
         params = params or {}
         options = ["Slot 0 (Default/Bypass)", "Slot 1", "Slot 2"]
         
-        current_option = self._attributes.get(Attributes.CURRENT_OPTION) or options[0]
-        
+        current_option = self.attributes.get(Attributes.CURRENT_OPTION) or options[0]
         target_option = current_option
         if cmd_id == "select_option":
             target_option = params.get("option", current_option)
