@@ -124,11 +124,9 @@ class Apr16DiracSlotSelect(SelectEntity):
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: display_option,
             })
-            await self.push_update()
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
-            await self.push_update()
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None

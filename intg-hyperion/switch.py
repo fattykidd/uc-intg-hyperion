@@ -25,8 +25,8 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
             f"{device_config.name} Dirac Filtering",
             features=[],
             attributes={
-            Attributes.STATE: States.ON,
-        },
+                Attributes.STATE: States.ON,
+            },
             cmd_handler=self._handle_command,
         )
         self._device = device
@@ -36,23 +36,19 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
     async def sync_state(self) -> None:
         """Synchronize master Dirac filtering state with the device."""
         try:
-            # Query device active slot or state status
             active_slot = await self._device.async_get_dirac_active_slot()
-            # If active slot > 0, filtering is engaged
             is_enabled = active_slot > 0
             
             self.update({
                 Attributes.STATE: States.ON if is_enabled else States.OFF,
             })
-            await self.push_update()
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac filtering switch: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
-            await self.push_update()
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
-) -> StatusCodes:
+    ) -> StatusCodes:
         """Handle command callbacks from the remote UI for master Dirac filtering toggle."""
         if cmd_id not in ("on", "off", "toggle"):
             return StatusCodes.NOT_IMPLEMENTED
@@ -79,7 +75,6 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
             self.update({
                 Attributes.STATE: States.ON if target_state else States.OFF,
             })
-            await self.push_update()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set Dirac filtering switch: %s", self._device.log_id, err)
