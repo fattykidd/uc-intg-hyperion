@@ -106,6 +106,12 @@ async def main():
     # Instantiate our custom driver class
     driver = Apr16Driver()
 
+    # Setup handler for manual IP/port entry
+    setup_handler = HyperionSetupFlow.create_handler(driver, discovery=None)
+    
+    # Initialize the API with the driver configuration
+    await driver.api.init("driver.json", setup_handler)
+    
     # Configure and initialize configuration manager using APR16Config
     driver.config_manager = BaseConfigManager(
         get_config_path(driver.api.config_dir_path),
@@ -116,12 +122,6 @@ async def main():
 
     # Register all configured devices from config file
     await driver.register_all_configured_devices()
-
-    # Setup handler for manual IP/port entry
-    setup_handler = HyperionSetupFlow.create_handler(driver, discovery=None)
-
-    # Initialize the API with the driver configuration
-    await driver.api.init("driver.json", setup_handler)
 
     # Keep the driver running
     await asyncio.Future()
