@@ -133,9 +133,9 @@ class Apr16DiracSlotSelect(SelectEntity):
     ) -> StatusCodes:
         """Handle command callbacks for the Dirac slot selector."""
         params = params or {}
-        options = ["Slot 0", "Slot 1", "Slot 2"]
+        options = ["Slot 0 (Default/Bypass)", "Slot 1", "Slot 2"]
         
-        current_option = self.get_attribute(Attributes.CURRENT_OPTION) or options[0]
+        current_option = self._attributes.get(Attributes.CURRENT_OPTION) or options[0]
         
         target_option = current_option
         if cmd_id == "select_option":
@@ -159,9 +159,9 @@ class Apr16DiracSlotSelect(SelectEntity):
         else:
             return StatusCodes.NOT_IMPLEMENTED
 
-        # Extract slot index from option string (e.g., "Slot 2" -> 2)
+        # Extract slot index from option string (e.g., "Slot 2" -> 2, "Slot 0..." -> 0)
         try:
-            slot_idx = int(target_option.split(" ")[-1])
+            slot_idx = int(target_option.split(" ")[1]) if "Slot" in target_option else 0
         except (ValueError, IndexError):
             slot_idx = 0
 
