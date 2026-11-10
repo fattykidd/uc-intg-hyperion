@@ -336,6 +336,7 @@ class Apr16DiracSlotSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}.dirac_active_slot",
             f"{device_config.name} Active Dirac Slot",
+            [],
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "Slot 0 (Default/Bypass)",
