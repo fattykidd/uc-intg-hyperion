@@ -131,16 +131,47 @@ class Apr16DiracSlotSelect(SelectEntity):
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
     ) -> StatusCodes:
-        """Handle command callbacks from the remote UI for Dirac slot switching."""
-        if cmd_id != Commands.SELECT_OPTION:
+        """Handle command callbacks for the Dirac slot selector."""
+        params = params or {}
+        options = ["Slot 0", "Slot 1", "Slot 2"]
+        
+        current_option = self.get_attribute(Attributes.CURRENT_OPTION) or options[0]
+        
+        target_option = current_option
+        if cmd_id == "select_option":
+            target_option = params.get("option", current_option)
+        elif cmd_id == "select_first":
+            target_option = options[0]
+        elif cmd_id == "select_last":
+            target_option = options[-1]
+        elif cmd_id == "select_next":
+            try:
+                idx = options.index(current_option)
+                target_option = options[(idx + 1) % len(options)]
+            except ValueError:
+                target_option = options[0]
+        elif cmd_id == "select_prev":
+            try:
+                idx = options.index(current_option)
+                target_option = options[(idx - 1) % len(options)]
+            except ValueError:
+                target_option = options[0]
+        else:
             return StatusCodes.NOT_IMPLEMENTED
 
-        option = params.get("option") if params else None
-        if not option or option not in DIRAC_SLOT_MAPPING:
-            return StatusCodes.BAD_REQUEST
+        # Extract slot index from option string (e.g., "Slot 2" -> 2)
+        try:
+            slot_idx = int(target_option.split(" ")[-1])
+        except (ValueError, IndexError):
+            slot_idx = 0
 
-        slot_idx = DIRAC_SLOT_MAPPING[option]
-        _LOG.debug("[%s] Selecting Dirac slot: %s (Index: %d)", self._device.log_id, option, slot_idx)
+        _LOG.debug(
+            "[%s] Executing Dirac slot selector command %s -> target option: %s (slot %d)",
+            self._device.log_id,
+            cmd_id,
+            target_option,
+            slot_idx,
+        )
 
         try:
             success = await self._device.async_set_dirac_filter_slot(slot_idx)
@@ -148,8 +179,7 @@ class Apr16DiracSlotSelect(SelectEntity):
                 return StatusCodes.SERVER_ERROR
 
             self.update({
-                Attributes.STATE: States.ON,
-                Attributes.CURRENT_OPTION: option,
+                Attributes.CURRENT_OPTION: target_option,
             })
             return StatusCodes.OK
         except Exception as err:
