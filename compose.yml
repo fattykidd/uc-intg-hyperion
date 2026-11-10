@@ -28,6 +28,9 @@ services:
      command: python3 -u intg-hyperion/driver.py
      volumes:
        - ../:/app
+       - /docker/core_sim/hyperion/data:/data
+     environment:
+       - UC_CONFIG_DIR=/data
 
 volumes:
   simulator-data:
