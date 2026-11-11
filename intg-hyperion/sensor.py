@@ -266,10 +266,9 @@ class Apr16InputTrebleSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}.input_treble",
             f"{device_config.name} Input Treble",
-            [],  # <-- Third positional argument must be a sequence (list)
+            ["dB"],  # <-- Sequence/list required by core API schema
             {Attributes.STATE: States.ON, Attributes.VALUE: "0"},
             device_class=DeviceClasses.CUSTOM,
-            options={Options.CUSTOM_UNIT: "dB"},
         )
         self._device = device
         self._device_config = device_config
