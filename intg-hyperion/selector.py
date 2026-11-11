@@ -90,7 +90,6 @@ class Apr16AudioModeSelect(SelectEntity):
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: option,
             })
-            await self.state_updated()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set audio mode: %s", self._device.log_id, err)
@@ -177,7 +176,6 @@ class Apr16DiracSlotSelect(SelectEntity):
             self.update({
                 Attributes.CURRENT_OPTION: target_option,
             })
-            await self.state_updated()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set Dirac slot: %s", self._device.log_id, err)
