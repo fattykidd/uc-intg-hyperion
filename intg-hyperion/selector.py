@@ -90,7 +90,7 @@ class Apr16AudioModeSelect(SelectEntity):
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: option,
             })
-            await self.push_update()
+            await self.state_updated()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set audio mode: %s", self._device.log_id, err)
@@ -158,12 +158,9 @@ class Apr16DiracSlotSelect(SelectEntity):
         else:
             return StatusCodes.NOT_IMPLEMENTED
 
-        # Extract slot index from option string (e.g., "Slot 2" -> 2, "Slot 0..." -> 0)
-        try:
-            slot_idx = int(target_option.split(" ")[1]) if "Slot" in target_option else 0
-        except (ValueError, IndexError):
-            slot_idx = 0
-
+        # Get slot index directly from the mapping dictionary
+        slot_idx = DIRAC_SLOT_MAPPING.get(target_option, 0)
+        
         _LOG.debug(
             "[%s] Executing Dirac slot selector command %s -> target option: %s (slot %d)",
             self._device.log_id,
@@ -180,6 +177,7 @@ class Apr16DiracSlotSelect(SelectEntity):
             self.update({
                 Attributes.CURRENT_OPTION: target_option,
             })
+            await self.state_updated()
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set Dirac slot: %s", self._device.log_id, err)

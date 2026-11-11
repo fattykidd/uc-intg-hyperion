@@ -23,7 +23,6 @@ FEATURES = [
     Features.MUTE_TOGGLE,
     Features.SELECT_SOURCE,
     Features.VOLUME_UP_DOWN,
-    Features.SELECT_SOUND_MODE,
 ]
 
 class Apr16MediaPlayer(MediaPlayerEntity):
@@ -47,11 +46,6 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                     "Digital 1", "Digital 2", "Digital 3", "Digital 4",
                     "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
                 ],
-                Attributes.SOUND_MODE: "",
-                Attributes.SOUND_MODE_LIST: [
-                    "Direct Mode", "DTS Neural:X", "Stereo", "All Channel Stereo",
-                    "Dolby Mode", "Native", "Dolby Surround",
-                ],
             },
             device_class=DeviceClasses.RECEIVER,
             cmd_handler=self._handle_command,
@@ -72,9 +66,6 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
                 Attributes.MUTED: attrs.MUTED,
                 Attributes.SOURCE: attrs.SOURCE,
-                Attributes.SOURCE_LIST: getattr(attrs, "SOURCE_LIST", []),
-                Attributes.SOUND_MODE: getattr(attrs, "SOUND_MODE", "Stereo"),
-                Attributes.SOUND_MODE_LIST: getattr(attrs, "SOUND_MODE_LIST", []),
             })
 
     async def _handle_command(
@@ -123,12 +114,6 @@ class Apr16MediaPlayer(MediaPlayerEntity):
             if cmd_id == Commands.SELECT_SOURCE:
                 if params and "source" in params:
                     await self._device.set_active_input(params["source"])
-                    return StatusCodes.OK
-                return StatusCodes.BAD_REQUEST
-
-            if cmd_id == Commands.SELECT_SOUND_MODE:
-                if params and "sound_mode" in params:
-                    await self._device.set_audio_mode(params["sound_mode"])
                     return StatusCodes.OK
                 return StatusCodes.BAD_REQUEST
 
