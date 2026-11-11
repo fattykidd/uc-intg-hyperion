@@ -266,10 +266,12 @@ class Apr16InputTrebleSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}.input_treble",
             f"{device_config.name} Input Treble",
-            [],
-            {Attributes.STATE: States.ON, Attributes.VALUE: "0"},
+            "dB",  # <-- 3rd positional argument: native_unit_of_measurement
+            {
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: "0",
+            },
             device_class=DeviceClasses.CUSTOM,
-            options={Options.CUSTOM_UNIT: "dB"},
         )
         self._device = device
         self._device_config = device_config
@@ -336,6 +338,7 @@ class Apr16DiracSlotSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}.dirac_active_slot",
             f"{device_config.name} Active Dirac Slot",
+            None,
             {
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: "Slot 0 (Default/Bypass)",
