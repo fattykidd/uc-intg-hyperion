@@ -280,11 +280,17 @@ class Apr16InputTrebleSensor(SensorEntity):
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
         try:
+            # Verify these method names match your refactored device.py
             active_input = await self._device.get_active_input() or "HDMI 1"
             treble = await self._device.get_input_treble(active_input)
-            self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(treble)})
+            
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: str(treble)
+            })
         except Exception as err:
-            _LOG.debug("[%s] Failed to update input treble sensor: %s", self.identifier, err)
+            _LOG.error("[%s] Failed to update input treble sensor: %s", self.entity_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
 
 
 class Apr16VideoDetailSensor(SensorEntity):
