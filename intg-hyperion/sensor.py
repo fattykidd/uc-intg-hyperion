@@ -144,7 +144,7 @@ class Apr16MuteSensor(SensorEntity):
             muted = await self._device.get_mute()
             self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(muted)})
         except Exception as err:
-            _LOG.debug("[%s] Failed to update mute sensor: %s", self.identifier, err)
+            _LOG.debug("[%s] Failed to update mute sensor: %s", self.entity_id, err)
 
 
 class Apr16DisplayBrightnessSensor(SensorEntity):
@@ -266,9 +266,10 @@ class Apr16InputTrebleSensor(SensorEntity):
         super().__init__(
             f"sensor.{device_config.identifier}.input_treble",
             f"{device_config.name} Input Treble",
-            ["dB"],  # <-- Sequence/list required by core API schema
+            [],
             {Attributes.STATE: States.ON, Attributes.VALUE: "0"},
             device_class=DeviceClasses.CUSTOM,
+            options={Options.CUSTOM_UNIT: "dB"},
         )
         self._device = device
         self._device_config = device_config
