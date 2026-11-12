@@ -347,9 +347,15 @@ class Apr16DiracSlotSensor(SensorEntity):
 
     async def sync_state(self) -> None:
         """Synchronize active Dirac slot sensor state with the device."""
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
         try:
             slot_idx = await self._device.async_get_dirac_active_slot()
-            display_value = SLOT_DISPLAY_NAMES.get(slot_idx, f"Slot {slot_idx}")
+            
+            # Pull from the device's dynamic slot name map, falling back gracefully
+            slot_names = getattr(self._device, "_dirac_slot_names_map", {})
+            display_value = slot_names.get(slot_idx, f"Slot {slot_idx}")
             
             self.update({
                 Attributes.STATE: States.ON,

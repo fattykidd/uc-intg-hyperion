@@ -7,14 +7,16 @@ sends commands, and tracks device state.
 :license: Mozilla Public License Version 2.0, see LICENSE for more details.
 """
 
+from asyncio import AbstractEventLoop
 import logging
+import re
+from typing import Any
+from urllib.parse import urlparse
+
 import aiohttp
 from aiohttp import ClientError
-from asyncio import AbstractEventLoop
-from typing import Any
-import aiohttp
-
 from dataclasses import dataclass
+
 from config import APR16Config
 from ucapi import media_player
 from ucapi_framework import (
@@ -196,6 +198,40 @@ class Apr16(StatelessHTTPDevice):
             _LOG.debug("[%s] GetDiracActiveSlot failed: %s", self.log_id, err)
             
         return 0
+
+    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
+        """Fetch custom Dirac slot profile names via byte-delimiter regex parsing."""
+        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
+        
+        
+        
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracSlots"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                    if response.status == 200:
+                        body = await response.read()
+                        if body:
+                            # Extract user-defined slot names using the byte delimiter pattern
+                            matches = re.findall(b'\x0b([^\x1a]+)\x1a', body)
+                            for idx, match in enumerate(matches, start=1):
+                                try:
+                                    name = match.decode('utf-8').strip()
+                                    if name:
+                                        slot_names[idx] = name
+                                except UnicodeDecodeError:
+                                    continue
+        except Exception as err:
+            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
+
+        return slot_names
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
