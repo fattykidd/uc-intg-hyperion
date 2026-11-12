@@ -170,119 +170,6 @@ class Apr16(StatelessHTTPDevice):
         """
         return self._media_player_attributes.get(device_id)
 
-    # =========================================================================
-    # Dirac Slot Management via Atlas Binary RPC (Port 80)
-    # =========================================================================
-    async def async_get_dirac_active_slot(self) -> int:
-        """Query the hardware live for the active Dirac slot index via binary response parsing."""
-        from urllib.parse import urlparse
-        parsed = urlparse(self._base_url)
-        host_ip = parsed.hostname
-
-        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracActiveSlot"
-        headers = {
-            "Content-Type": "application/proto",
-            "connect-protocol-version": "1",
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
-                    body = await response.read()
-                    if response.status == 200:
-                        if not body:
-                            return 0
-                        if len(body) >= 2 and body[0] == 0x08:
-                            return body[1]
-        except Exception as err:
-            _LOG.debug("[%s] GetDiracActiveSlot failed: %s", self.log_id, err)
-            
-        return 0
-
-    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
-        """Fetch custom Dirac slot profile names via byte-delimiter regex parsing."""
-        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
-        
-        
-        
-        parsed = urlparse(self._base_url)
-        host_ip = parsed.hostname
-        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracSlots"
-        headers = {
-            "Content-Type": "application/proto",
-            "connect-protocol-version": "1",
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
-                    if response.status == 200:
-                        body = await response.read()
-                        if body:
-                            # Extract user-defined slot names using the byte delimiter pattern
-                            matches = re.findall(b'\x0b([^\x1a]+)\x1a', body)
-                            for idx, match in enumerate(matches, start=1):
-                                try:
-                                    name = match.decode('utf-8').strip()
-                                    if name:
-                                        slot_names[idx] = name
-                                except UnicodeDecodeError:
-                                    continue
-        except Exception as err:
-            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
-
-        return slot_names
-
-    async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
-        """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
-        payload_map = {
-            0: bytes.fromhex("1001"),
-            1: bytes.fromhex("08011001"),
-            2: bytes.fromhex("08021001"),
-        }
-        inner_payload = payload_map.get(slot_index, bytes.fromhex("1001"))
-        
-        from urllib.parse import urlparse
-        parsed = urlparse(self._base_url)
-        host_ip = parsed.hostname
-
-        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFilterSlot"
-        headers = {
-            "Accept": "*/*",
-            "Connect-Protocol-Version": "1",
-            "Content-Type": "application/proto",
-        }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
-                    return resp.status < 400
-        except Exception as err:
-            _LOG.error("[%s] SetDiracFilterSlot failed: %s", self.log_id, err)
-            return False
-
-    async def async_set_dirac_filtering(self, enabled: bool) -> bool:
-        """Enable or disable master Dirac filtering using hex-decoded bytes."""
-        inner_payload = (
-            bytes.fromhex("080110011801") if enabled else bytes.fromhex("10011801")
-        )
-        
-        from urllib.parse import urlparse
-        parsed = urlparse(self._base_url)
-        host_ip = parsed.hostname
-
-        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFiltering"
-        headers = {
-            "Accept": "*/*",
-            "Connect-Protocol-Version": "1",
-            "Content-Type": "application/proto",
-        }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
-                    return resp.status < 400
-        except Exception as err:
-            _LOG.error("[%s] SetDiracFiltering failed: %s", self.log_id, err)
-            return False
 
     # =========================================================================
     # Connection Management
@@ -399,6 +286,17 @@ class Apr16(StatelessHTTPDevice):
                 current_vol,
                 current_mute,
             )
+
+            # --- Fetch dynamic device configurations upon successful connection ---
+            try:
+                await asyncio.gather(
+                    self.async_fetch_dynamic_inputs(),
+                    self.async_fetch_dirac_slot_names(),
+                    return_exceptions=True
+                )
+                _LOG.debug("[%s] Successfully fetched dynamic input and Dirac slot maps.", self.log_id)
+            except Exception as fetch_err:
+                _LOG.debug("[%s] Error fetching dynamic configuration maps: %s", self.log_id, fetch_err)
 
         except Exception as err:
             _LOG.error(
@@ -778,6 +676,125 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
                 return await resp.json()
 
+    
+    # =========================================================================
+    # Dirac Slot Management via Atlas Binary RPC (Port 80)
+    # =========================================================================
+    async def async_get_dirac_active_slot(self) -> int:
+        """Query the hardware live for the active Dirac slot index via binary response parsing."""
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracActiveSlot"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                    body = await response.read()
+                    if response.status == 200:
+                        if not body:
+                            return 0
+                        if len(body) >= 2 and body[0] == 0x08:
+                            return body[1]
+        except Exception as err:
+            _LOG.debug("[%s] GetDiracActiveSlot failed: %s", self.log_id, err)
+                
+        return 0
+    
+    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
+        """Fetch custom Dirac slot profile names via byte-delimiter regex parsing."""
+        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
+            
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracSlots"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+    
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                    body = await response.read()
+                        
+                    # 🔍 DEBUG PRINT: Verify raw bytes received from port 80
+                    _LOG.debug("[%s] GetDiracSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
+                        
+                    if response.status == 200 and body:
+                        matches = re.findall(b'\x0b([^\x1a]+)\x1a', body)
+                        _LOG.debug("[%s] GetDiracSlots regex matches found: %s", self.log_id, matches)
+                            
+                        for idx, match in enumerate(matches, start=1):
+                            try:
+                                name = match.decode('utf-8').strip()
+                                if name:
+                                    slot_names[idx] = name
+                                    _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
+                            except UnicodeDecodeError:
+                                continue
+        except Exception as err:
+            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
+    
+        self._dirac_slot_names_map = slot_names
+        _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
+        return slot_names
+    
+    async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
+        """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
+        payload_map = {
+            0: bytes.fromhex("1001"),
+            1: bytes.fromhex("08011001"),
+            2: bytes.fromhex("08021001"),
+        }
+        inner_payload = payload_map.get(slot_index, bytes.fromhex("1001"))
+            
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFilterSlot"
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
+                    return resp.status < 400
+        except Exception as err:
+            _LOG.error("[%s] SetDiracFilterSlot failed: %s", self.log_id, err)
+            return False
+    
+    async def async_set_dirac_filtering(self, enabled: bool) -> bool:
+        """Enable or disable master Dirac filtering using hex-decoded bytes."""
+        inner_payload = (
+            bytes.fromhex("080110011801") if enabled else bytes.fromhex("10011801")
+        )
+            
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFiltering"
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
+                    return resp.status < 400
+        except Exception as err:
+            _LOG.error("[%s] SetDiracFiltering failed: %s", self.log_id, err)
+            return False
     
     # =========================================================================
     # Audio Status, Formats & Processing Modes
