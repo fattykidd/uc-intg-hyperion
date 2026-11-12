@@ -708,25 +708,27 @@ class Apr16(StatelessHTTPDevice):
         return 0
     
     async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
-        """Fetch custom Dirac slot profile names."""
+        """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots."""
         slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
         
-        url = f"{self._base_url}/commands.v1.AtlasService/GetDiracSlots"
+        # Explicitly target port 80 for Atlas gRPC-web endpoints
+        url = f"http://{self._host}:80/commands.v1.AtlasService/GetDiracFilterSlots"
         headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
             "Content-Type": "application/proto",
-            "connect-protocol-version": "1",
+            "User-Agent": "UnfoldedCircle-HyperionIntegration/1.0",
         }
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                async with session.post(url, headers=headers, data=b"", timeout=3.0) as response:
                     body = await response.read()
-                    _LOG.debug("[%s] GetDiracSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
+                    _LOG.debug("[%s] GetDiracFilterSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
                     
                     if response.status == 200 and body:
-                        # Use exact byte regex matching to avoid string-decoding corruption
+                        # Extract everything strictly bounded between \x0b and \x1a delimiters
                         extracted_slots = re.findall(b'\x0b([^\x1a]+)\x1a', body)
-                        _LOG.debug("[%s] Raw extracted slot bytes: %s", self.log_id, extracted_slots)
                         
                         cleaned_slots = []
                         for s in extracted_slots:
@@ -742,7 +744,7 @@ class Apr16(StatelessHTTPDevice):
                             slot_names[idx] = name
                             _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
         except Exception as err:
-            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
+            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names from port 80: %s", self.log_id, err)
 
         self._dirac_slot_names_map = slot_names
         _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
