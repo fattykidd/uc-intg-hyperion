@@ -7,6 +7,7 @@ sends commands, and tracks device state.
 :license: Mozilla Public License Version 2.0, see LICENSE for more details.
 """
 
+import asyncio
 from asyncio import AbstractEventLoop
 import logging
 import re
