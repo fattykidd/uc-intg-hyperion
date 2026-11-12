@@ -711,19 +711,21 @@ class Apr16(StatelessHTTPDevice):
         """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots."""
         slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
         
-        # Use your exact host/host_ip attribute
-        host = getattr(self, "host_ip", getattr(self, "_host", getattr(self, "host", None)))
-        if not host:
-            _LOG.error("[%s] async_fetch_dirac_slot_names error: Host IP is missing!", self.log_id)
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+        
+        if not host_ip:
+            _LOG.error("[%s] async_fetch_dirac_slot_names error: Could not extract hostname from _base_url!", self.log_id)
             return slot_names
 
-        url = f"http://{host}:80/commands.v1.AtlasService/GetDiracFilterSlots"
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracFilterSlots"
         headers = {
             "Accept": "*/*",
             "Connect-Protocol-Version": "1",
             "Content-Type": "application/proto",
-            "Origin": f"http://{host}:80",
-            "Referer": f"http://{host}:80/",
+            "Origin": f"http://{host_ip}:80",
+            "Referer": f"http://{host_ip}:80/",
             "User-Agent": "UnfoldedCircle-HyperionIntegration/1.0",
         }
         
