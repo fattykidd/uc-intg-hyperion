@@ -707,9 +707,9 @@ class Apr16(StatelessHTTPDevice):
                 
         return 0
     
-    async def async_fetch_dirac_slot_names(self) -> list[str]:
-        """Fetch custom Dirac slot profile names matching the HA parsing pattern."""
-        default_slots = ["Slot 0 (Default/Bypass)", "Slot 1", "Slot 2"]
+    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
+        """Fetch custom Dirac slot profile names."""
+        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
         
         url = f"{self._base_url}/commands.v1.AtlasService/GetDiracSlots"
         headers = {
@@ -721,27 +721,32 @@ class Apr16(StatelessHTTPDevice):
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
                     body = await response.read()
+                    _LOG.debug("[%s] GetDiracSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
+                    
                     if response.status == 200 and body:
-                        if isinstance(body, bytes):
-                            text_data = body.decode("utf-8", errors="ignore")
-                        else:
-                            text_data = str(body)
-
-                        extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', text_data)
+                        # Use exact byte regex matching to avoid string-decoding corruption
+                        extracted_slots = re.findall(b'\x0b([^\x1a]+)\x1a', body)
+                        _LOG.debug("[%s] Raw extracted slot bytes: %s", self.log_id, extracted_slots)
+                        
                         cleaned_slots = []
                         for s in extracted_slots:
-                            cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s).strip()
-                            if cleaned and cleaned not in cleaned_slots:
-                                cleaned_slots.append(cleaned)
+                            try:
+                                cleaned = s.decode('utf-8', errors='ignore').strip()
+                                cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', cleaned)
+                                if cleaned and cleaned not in cleaned_slots:
+                                    cleaned_slots.append(cleaned)
+                            except Exception:
+                                continue
                         
-                        if cleaned_slots:
-                            self._dirac_slot_names_list = cleaned_slots
-                            return cleaned_slots
+                        for idx, name in enumerate(cleaned_slots, start=1):
+                            slot_names[idx] = name
+                            _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
         except Exception as err:
             _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
 
-        self._dirac_slot_names_list = default_slots
-        return default_slots
+        self._dirac_slot_names_map = slot_names
+        _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
+        return slot_names
     
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
