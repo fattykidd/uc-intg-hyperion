@@ -708,20 +708,25 @@ class Apr16(StatelessHTTPDevice):
         return 0
     
     async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
-        """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots with session cookies."""
+        """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots."""
         slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
         
-        url = f"http://{self._host}:80/commands.v1.AtlasService/GetDiracFilterSlots"
+        # Use your exact host/host_ip attribute
+        host = getattr(self, "host_ip", getattr(self, "_host", getattr(self, "host", None)))
+        if not host:
+            _LOG.error("[%s] async_fetch_dirac_slot_names error: Host IP is missing!", self.log_id)
+            return slot_names
+
+        url = f"http://{host}:80/commands.v1.AtlasService/GetDiracFilterSlots"
         headers = {
             "Accept": "*/*",
             "Connect-Protocol-Version": "1",
             "Content-Type": "application/proto",
-            "Origin": f"http://{self._host}:80",
-            "Referer": f"http://{self._host}:80/",
+            "Origin": f"http://{host}:80",
+            "Referer": f"http://{host}:80/",
             "User-Agent": "UnfoldedCircle-HyperionIntegration/1.0",
         }
         
-        # Include session cookie if your device client stores it during authentication
         cookies = {}
         if hasattr(self, "session_cookie") and self.session_cookie:
             cookies["atlas_served_asset_session"] = self.session_cookie
@@ -750,7 +755,7 @@ class Apr16(StatelessHTTPDevice):
                             slot_names[idx] = name
                             _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
         except Exception as err:
-            _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names from port 80: %s", self.log_id, err)
+            _LOG.error("[%s] Failed to fetch dynamic Dirac slot names from port 80: %s", self.log_id, err)
 
         self._dirac_slot_names_map = slot_names
         _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
