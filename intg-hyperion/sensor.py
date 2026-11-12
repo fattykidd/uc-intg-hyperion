@@ -353,9 +353,13 @@ class Apr16DiracSlotSensor(SensorEntity):
         try:
             slot_idx = await self._device.async_get_dirac_active_slot()
             
-            # Pull from the device's dynamic slot name map, falling back gracefully
-            slot_names = getattr(self._device, "_dirac_slot_names_map", {})
-            display_value = slot_names.get(slot_idx, f"Slot {slot_idx}")
+            # Pull the dynamic slot names list matching the HA pattern
+            slots = getattr(self._device, "_dirac_slot_names_list", ["Slot 0", "Slot 1", "Slot 2"])
+
+            if isinstance(slot_idx, int) and 0 <= slot_idx < len(slots):
+                display_value = slots[slot_idx]
+            else:
+                display_value = f"Slot {slot_idx}"
             
             self.update({
                 Attributes.STATE: States.ON,
