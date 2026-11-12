@@ -129,7 +129,7 @@ class Apr16MuteSensor(SensorEntity):
             f"sensor.{device_config.identifier}.mute",
             f"{device_config.name} Mute",
             [],
-            {Attributes.STATE: States.ON, Attributes.VALUE: "False"},
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unmuted"},
             device_class=DeviceClasses.CUSTOM,
         )
         self._device = device
@@ -142,7 +142,8 @@ class Apr16MuteSensor(SensorEntity):
             return
         try:
             muted = await self._device.get_mute()
-            self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(muted)})
+            display_val = "Muted" if muted else "Unmuted"
+            self.update({Attributes.STATE: States.ON, Attributes.VALUE: display_val})
         except Exception as err:
             _LOG.debug("[%s] Failed to update mute sensor: %s", self.entity_id, err)
 

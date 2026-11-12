@@ -709,7 +709,7 @@ class Apr16(StatelessHTTPDevice):
     
     async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
         """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots."""
-        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
+        slot_names: dict[int, str] = {}
         
         from urllib.parse import urlparse
         parsed = urlparse(self._base_url)
