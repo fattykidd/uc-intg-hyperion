@@ -353,20 +353,23 @@ class Apr16DiracSlotSensor(SensorEntity):
         try:
             slot_idx = await self._device.async_get_dirac_active_slot()
             
-            # Pull the dynamic slot names list matching the HA pattern
-            slots = getattr(self._device, "_dirac_slot_names_list", ["Slot 0", "Slot 1", "Slot 2"])
-
-            if isinstance(slot_idx, int) and 0 <= slot_idx < len(slots):
-                display_value = slots[slot_idx]
-            else:
-                display_value = f"Slot {slot_idx}"
+            # Pull from the device's dynamic slot name map
+            slot_names = getattr(self._device, "_dirac_slot_names_map", {0: "Slot 0 (Default/Bypass)"})
+            
+            # Robust lookup supporting both int and str keys, with clean fallback
+            display_value = (
+                slot_names.get(slot_idx) 
+                or slot_names.get(str(slot_idx)) 
+                or slot_names.get(int(slot_idx) if str(slot_idx).isdigit() else None)
+                or f"Slot {slot_idx}"
+            )
             
             self.update({
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: display_value,
             })
         except Exception as err:
-            _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self._device.log_id, err)
+            _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
 
 class Apr16AudioModeSensor(SensorEntity):
