@@ -280,18 +280,11 @@ class Apr16InputTrebleSensor(SensorEntity):
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
         try:
-            # Verify these method names match your refactored device.py
             active_input = await self._device.get_active_input() or "HDMI 1"
             treble = await self._device.get_input_treble(active_input)
-            
-            self.update({
-                Attributes.STATE: States.ON,
-                Attributes.VALUE: str(treble)
-            })
+            self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(treble)})
         except Exception as err:
-            _LOG.error("[%s] Failed to update input treble sensor: %s", self.entity_id, err)
-            self.update({Attributes.STATE: States.UNAVAILABLE})
-
+            _LOG.debug("[%s] Failed to update input treble sensor: %s", self.identifier, err)
 
 class Apr16VideoDetailSensor(SensorEntity):
     """Sensor entity for displaying active video resolution and HDR details."""
@@ -364,4 +357,62 @@ class Apr16DiracSlotSensor(SensorEntity):
             })
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self._device.log_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+
+class Apr16AudioModeSensor(SensorEntity):
+    """Sensor entity for displaying the active audio processing mode."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.audio_mode",
+            f"{device_config.name} Audio Mode",
+            [],
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unknown"},
+            device_class=DeviceClasses.CUSTOM,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            mode = await self._device.get_audio_mode()
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: str(mode) if mode else "Unknown"
+            })
+        except Exception as err:
+            _LOG.error("[%s] Failed to update audio mode sensor: %s", self.entity_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+
+class Apr16ActiveInputSensor(SensorEntity):
+    """Sensor entity for displaying the user-defined active input source."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.active_input",
+            f"{device_config.name} Active Input",
+            [],
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unknown"},
+            device_class=DeviceClasses.CUSTOM,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            active_name = await self._device.get_active_input_name()
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: str(active_name) if active_name else "Unknown"
+            })
+        except Exception as err:
+            _LOG.error("[%s] Failed to update active input sensor: %s", self.entity_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})

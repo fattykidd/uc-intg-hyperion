@@ -46,6 +46,8 @@ from sensor import (
     Apr16InputBassSensor,
     Apr16InputTrebleSensor,
     Apr16DiracSlotSensor,
+    Apr16AudioModeSensor,
+    Apr16ActiveInputSensor,
 )
 
 from switch import Apr16DiracFilteringSwitch
@@ -76,6 +78,8 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16HostIpSensor,
                 Apr16InputBassSensor,
                 Apr16InputTrebleSensor,
+                Apr16AudioModeSensor,
+                Apr16ActiveInputSensor,
                 Apr16RebootButton, 
                 Apr16HpdButton,
                 Apr16VolumeUpButton,

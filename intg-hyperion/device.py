@@ -83,32 +83,24 @@ class Apr16(StatelessHTTPDevice):
         # Store the base URL for direct HTTP communication
         self._base_url = f"http://{device_config.address}:{device_config.port}"
 
+        # Cache for custom input names fetched from the device
+        self._input_names_map: dict[int, str] = {}
+
+        # Default source list for fallback mapping
+        self._default_inputs = [
+            "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6",
+            "HDMI 7", "Digital 1", "Digital 2", "Digital 3", "Digital 4",
+            "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
+        ]
+
         # State dicts keyed by device_id (identifier), not entity_id.
-        # Seed with defaults so accessors always return a valid object.
         self._media_player_attributes: dict[str, MediaPlayerAttributes] = {
             device_config.identifier: MediaPlayerAttributes(
                 STATE=media_player.States.OFF,
                 VOLUME=0,
                 MUTED=False,
                 SOURCE=None,
-                SOURCE_LIST=[
-                    "HDMI 1",
-                    "HDMI 2",
-                    "HDMI 3",
-                    "HDMI 4",
-                    "HDMI 5",
-                    "HDMI 6",
-                    "HDMI 7",                    
-                    "Digital 1",
-                    "Digital 2",
-                    "Digital 3",
-                    "Digital 4",
-                    "Analog 1",
-                    "Analog 2",
-                    "Analog 3",
-                    "Dante",
-                    "eArc",
-                ],
+                SOURCE_LIST=list(self._default_inputs),
                 SOUND_MODE="",
                 SOUND_MODE_LIST=[
                     "Direct Mode",
@@ -669,9 +661,63 @@ class Apr16(StatelessHTTPDevice):
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                # Adjust key based on exact API JSON response structure (e.g., 'source' or 'input')
                 return str(data.get("source", data.get("input", "")))
 
+    async def async_fetch_dynamic_inputs(self) -> dict[int, str]:
+        """Fetch custom input names, falling back gracefully for unavailable ports."""
+        input_names: dict[int, str] = {}
+        async with aiohttp.ClientSession() as session:
+            for inp_id in range(1, 17):
+                url = f"{self._base_url}/api/atlas/input/name?input={inp_id}"
+                try:
+                    async with session.get(
+                        url,
+                        headers={"accept": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=1.0),
+                    ) as resp:
+                        if resp.status == 200:
+                            res_json = await resp.json()
+                            name = res_json.get("name") if isinstance(res_json, dict) else None
+                            if isinstance(name, str) and name.strip():
+                                input_names[inp_id] = name.strip()
+                except (aiohttp.ClientError, TimeoutError, OSError) as err:
+                    _LOG.debug("Failed or stopped fetching input name for input %d: %s", inp_id, err)
+                    break
+
+        self._input_names_map = input_names
+
+        attrs = self._media_player_attributes.get(self.identifier)
+        if attrs:
+            attrs.SOURCE_LIST = [
+                input_names.get(input_id, self._default_inputs[input_id - 1])
+                for input_id in range(1, len(self._default_inputs) + 1)
+            ]
+            self.update()
+        return input_names
+
+    async def get_active_input_name(self) -> str:
+        """Get the friendly active input name using custom user-defined names if available."""
+        raw_input = await self.get_active_input()
+        if not raw_input:
+            return "Unknown"
+
+        attrs = self._media_player_attributes.get(self.identifier)
+        if not attrs or not attrs.SOURCE_LIST:
+            return raw_input
+
+        # Handle numeric index return
+        if raw_input.isdigit():
+            idx = int(raw_input) - 1
+            if 0 <= idx < len(attrs.SOURCE_LIST):
+                return attrs.SOURCE_LIST[idx]
+
+        # Handle string matching against default ports to map to custom SOURCE_LIST index
+        for idx, default_name in enumerate(self._default_inputs):
+            if raw_input.casefold() == default_name.casefold() and idx < len(attrs.SOURCE_LIST):
+                return attrs.SOURCE_LIST[idx]
+
+        return raw_input
+    
     async def set_active_input(self, source: str) -> None:
         """Switch the active audio/video input source via POST /api/atlas/input/active."""
         _LOG.debug("[%s] Setting active input to: %s", self.log_id, source)
@@ -696,41 +742,7 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
                 return await resp.json()
 
-    async def async_fetch_dynamic_inputs(self) -> dict[int, str]:
-        """Fetch custom input names, falling back gracefully for unavailable ports."""
-        input_names: dict[int, str] = {}
-        async with aiohttp.ClientSession() as session:
-            for inp_id in range(1, 17):
-                url = f"{self._base_url}/api/atlas/input/name?input={inp_id}"
-                try:
-                    async with session.get(
-                        url,
-                        headers={"accept": "application/json"},
-                        timeout=aiohttp.ClientTimeout(total=1.0),
-                    ) as resp:
-                        if resp.status == 200:
-                            res_json = await resp.json()
-                            name = res_json.get("name") if isinstance(res_json, dict) else None
-                            if isinstance(name, str) and name.strip():
-                                input_names[inp_id] = name.strip()
-                except (ClientError, TimeoutError, OSError) as err:
-                    _LOG.debug("Failed or stopped fetching input name for input %d: %s", inp_id, err)
-                    break  # Stop querying if an input ID doesn't exist or connection drops
-
-        attrs = self._media_player_attributes.get(self.identifier)
-        if attrs:
-            defaults = [
-                "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6",
-                "HDMI 7", "Digital 1", "Digital 2", "Digital 3", "Digital 4",
-                "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
-            ]
-            attrs.SOURCE_LIST = [
-                input_names.get(input_id, defaults[input_id - 1])
-                for input_id in range(1, len(defaults) + 1)
-            ]
-            self.push_update()
-        return input_names
-
+    
     # =========================================================================
     # Audio Status, Formats & Processing Modes
     # =========================================================================
