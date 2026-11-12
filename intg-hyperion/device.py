@@ -707,44 +707,41 @@ class Apr16(StatelessHTTPDevice):
                 
         return 0
     
-    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
-        """Fetch custom Dirac slot profile names via byte-delimiter regex parsing."""
-        slot_names: dict[int, str] = {0: "Slot 0 (Default/Bypass)"}
-            
-        parsed = urlparse(self._base_url)
-        host_ip = parsed.hostname
-        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracSlots"
+    async def async_fetch_dirac_slot_names(self) -> list[str]:
+        """Fetch custom Dirac slot profile names matching the HA parsing pattern."""
+        default_slots = ["Slot 0 (Default/Bypass)", "Slot 1", "Slot 2"]
+        
+        url = f"{self._base_url}/commands.v1.AtlasService/GetDiracSlots"
         headers = {
             "Content-Type": "application/proto",
             "connect-protocol-version": "1",
         }
-    
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
                     body = await response.read()
-                        
-                    # 🔍 DEBUG PRINT: Verify raw bytes received from port 80
-                    _LOG.debug("[%s] GetDiracSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
-                        
                     if response.status == 200 and body:
-                        matches = re.findall(b'\x0b([^\x1a]+)\x1a', body)
-                        _LOG.debug("[%s] GetDiracSlots regex matches found: %s", self.log_id, matches)
-                            
-                        for idx, match in enumerate(matches, start=1):
-                            try:
-                                name = match.decode('utf-8').strip()
-                                if name:
-                                    slot_names[idx] = name
-                                    _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
-                            except UnicodeDecodeError:
-                                continue
+                        if isinstance(body, bytes):
+                            text_data = body.decode("utf-8", errors="ignore")
+                        else:
+                            text_data = str(body)
+
+                        extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', text_data)
+                        cleaned_slots = []
+                        for s in extracted_slots:
+                            cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s).strip()
+                            if cleaned and cleaned not in cleaned_slots:
+                                cleaned_slots.append(cleaned)
+                        
+                        if cleaned_slots:
+                            self._dirac_slot_names_list = cleaned_slots
+                            return cleaned_slots
         except Exception as err:
             _LOG.debug("[%s] Failed to fetch dynamic Dirac slot names: %s", self.log_id, err)
-    
-        self._dirac_slot_names_map = slot_names
-        _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
-        return slot_names
+
+        self._dirac_slot_names_list = default_slots
+        return default_slots
     
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
