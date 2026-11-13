@@ -656,22 +656,28 @@ class Apr16(StatelessHTTPDevice):
     async def set_active_input(self, source: str) -> None:
         """Switch the active audio/video input source via POST /api/atlas/input/active."""
         _LOG.debug("[%s] Setting active input, incoming source: %s", self.log_id, source)
-        _LOG.debug("[%s] Current _input_names_map: %s", self.log_id, getattr(self, "_input_names_map", None))
-        
+
         target_key = source
+        clean_source = source.strip().casefold()
+
+        # 1. Check if incoming source matches a custom user-defined name in _input_names_map
+        matched_id = None
         if hasattr(self, "_input_names_map") and self._input_names_map:
-            forward_map = {str(k).lower(): k for k in self._input_names_map.keys()}
-            reverse_map = {str(v).lower(): k for k, v in self._input_names_map.items()}
-            
-            clean_name = str(source).lower()
-            if clean_name in reverse_map:
-                target_key = reverse_map[clean_name]
-                _LOG.debug("[%s] Mapped friendly name '%s' -> hardware key '%s'", self.log_id, source, target_key)
-            elif clean_name in forward_map:
-                target_key = forward_map[clean_name]
-                _LOG.debug("[%s] Mapped case-corrected name '%s' -> hardware key '%s'", self.log_id, source, target_key)
-            else:
-                _LOG.warning("[%s] Source '%s' not found in _input_names_map! Sending as-is.", self.log_id, source)
+            for inp_id, custom_name in self._input_names_map.items():
+                if custom_name.strip().casefold() == clean_source:
+                    matched_id = inp_id
+                    break
+
+        if matched_id is not None and 1 <= matched_id <= len(self._default_inputs):
+            target_key = self._default_inputs[matched_id - 1]
+        else:
+            # 2. Fallback: normalize casing against _default_inputs (e.g., "Hdmi 3" -> "HDMI 3")
+            for default_name in self._default_inputs:
+                if default_name.casefold() == clean_source:
+                    target_key = default_name
+                    break
+
+        _LOG.debug("[%s] Resolved '%s' -> hardware key '%s'", self.log_id, source, target_key)
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
