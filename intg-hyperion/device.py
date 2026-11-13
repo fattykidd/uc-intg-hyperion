@@ -656,10 +656,22 @@ class Apr16(StatelessHTTPDevice):
     async def set_active_input(self, source: str) -> None:
         """Switch the active audio/video input source via POST /api/atlas/input/active."""
         _LOG.debug("[%s] Setting active input to: %s", self.log_id, source)
+        
+        target_key = source
+        if hasattr(self, "_input_names_map") and self._input_names_map:
+            forward_map = {k.lower(): k for k in self._input_names_map.keys()}
+            reverse_map = {v.lower(): k for k, v in self._input_names_map.items()}
+            
+            clean_name = source.lower()
+            if clean_name in reverse_map:
+                target_key = reverse_map[clean_name]
+            elif clean_name in forward_map:
+                target_key = forward_map[clean_name]
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self._base_url}/api/atlas/input/active",
-                json={"input": source},
+                json={"input": target_key},
             ) as resp:
                 resp.raise_for_status()
 
