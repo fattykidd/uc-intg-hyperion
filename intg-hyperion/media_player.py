@@ -23,7 +23,6 @@ FEATURES = [
     Features.MUTE_TOGGLE,
     Features.SELECT_SOURCE,
     Features.VOLUME_UP_DOWN,
-    Features.SELECT_SOUND_MODE,
 ]
 
 class Apr16MediaPlayer(MediaPlayerEntity):
@@ -32,6 +31,13 @@ class Apr16MediaPlayer(MediaPlayerEntity):
     def __init__(self, device_config, device: Apr16):
         self._device = device
         self._device_config = device_config
+
+        # Pull dynamic input names if available, falling back to empty list or defaults
+        initial_sources = list(device._input_names_map.values()) if hasattr(device, "_input_names_map") and device._input_names_map else [
+            "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7",
+            "Digital 1", "Digital 2", "Digital 3", "Digital 4",
+            "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
+        ]
 
         super().__init__(
             f"media_player.{device_config.identifier}",
@@ -42,16 +48,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.VOLUME: 0,
                 Attributes.MUTED: False,
                 Attributes.SOURCE: "",
-                Attributes.SOURCE_LIST: [
-                    "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7",
-                    "Digital 1", "Digital 2", "Digital 3", "Digital 4",
-                    "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
-                ],
-                Attributes.SOUND_MODE: "",
-                Attributes.SOUND_MODE_LIST: [
-                    "Direct Mode", "DTS Neural:X", "Stereo", "All Channel Stereo",
-                    "Dolby Mode", "Native", "Dolby Surround",
-                ],
+                Attributes.SOURCE_LIST: initial_sources,
             },
             device_class=DeviceClasses.RECEIVER,
             cmd_handler=self._handle_command,
@@ -67,15 +64,19 @@ class Apr16MediaPlayer(MediaPlayerEntity):
 
         attrs = self._device.get_media_player_attributes(self._device_config.identifier)
         if attrs:
-            self.update({
+            # Refresh source list dynamically in case custom input map updated post-init
+            current_sources = list(self._device._input_names_map.values()) if hasattr(self._device, "_input_names_map") and self._device._input_names_map else None
+            
+            update_payload = {
                 Attributes.STATE: attrs.STATE,
                 Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
                 Attributes.MUTED: attrs.MUTED,
                 Attributes.SOURCE: attrs.SOURCE,
-                Attributes.SOURCE_LIST: getattr(attrs, "SOURCE_LIST", []),
-                Attributes.SOUND_MODE: getattr(attrs, "SOUND_MODE", "Stereo"),
-                Attributes.SOUND_MODE_LIST: getattr(attrs, "SOUND_MODE_LIST", []),
-            })
+            }
+            if current_sources:
+                update_payload[Attributes.SOURCE_LIST] = current_sources
+                
+            self.update(update_payload)
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
@@ -123,12 +124,6 @@ class Apr16MediaPlayer(MediaPlayerEntity):
             if cmd_id == Commands.SELECT_SOURCE:
                 if params and "source" in params:
                     await self._device.set_active_input(params["source"])
-                    return StatusCodes.OK
-                return StatusCodes.BAD_REQUEST
-
-            if cmd_id == Commands.SELECT_SOUND_MODE:
-                if params and "sound_mode" in params:
-                    await self._device.set_audio_mode(params["sound_mode"])
                     return StatusCodes.OK
                 return StatusCodes.BAD_REQUEST
 

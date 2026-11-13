@@ -1,5 +1,4 @@
 # Docker Compose for development with the UC Core Simulator
-# TODO: Update the name and hostname for your integration
 name: integration-hyperion
 
 services:
@@ -16,15 +15,14 @@ services:
     volumes:
       - simulator-data:/data
 
-  # Your integration service
-  # TODO: Rename 'intg-template' to match your integration folder
   intg-hyperion:
      build:
        context: .
        dockerfile: Dockerfile
+     working_dir: /app/uc-intg-hyperion
      hostname: hyperion
      # nodemon watches for file changes and auto-restarts
-     command: bash -c "UC_INTEGRATION_INTERFACE=$(hostname -i) nodemon -e py,json --exec 'python3 -u' intg-hyperion/driver.py"
+     command: python3 -u intg-hyperion/driver.py
      volumes:
        - ../:/app
 

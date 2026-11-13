@@ -7,12 +7,17 @@ sends commands, and tracks device state.
 :license: Mozilla Public License Version 2.0, see LICENSE for more details.
 """
 
-import logging
+import asyncio
 from asyncio import AbstractEventLoop
+import logging
+import re
 from typing import Any
-import aiohttp
+from urllib.parse import urlparse
 
+import aiohttp
+from aiohttp import ClientError
 from dataclasses import dataclass
+
 from config import APR16Config
 from ucapi import media_player
 from ucapi_framework import (
@@ -81,32 +86,24 @@ class Apr16(StatelessHTTPDevice):
         # Store the base URL for direct HTTP communication
         self._base_url = f"http://{device_config.address}:{device_config.port}"
 
+        # Cache for custom input names fetched from the device
+        self._input_names_map: dict[int, str] = {}
+
+        # Default source list for fallback mapping
+        self._default_inputs = [
+            "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6",
+            "HDMI 7", "Digital 1", "Digital 2", "Digital 3", "Digital 4",
+            "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
+        ]
+
         # State dicts keyed by device_id (identifier), not entity_id.
-        # Seed with defaults so accessors always return a valid object.
         self._media_player_attributes: dict[str, MediaPlayerAttributes] = {
             device_config.identifier: MediaPlayerAttributes(
                 STATE=media_player.States.OFF,
                 VOLUME=0,
                 MUTED=False,
                 SOURCE=None,
-                SOURCE_LIST=[
-                    "HDMI 1",
-                    "HDMI 2",
-                    "HDMI 3",
-                    "HDMI 4",
-                    "HDMI 5",
-                    "HDMI 6",
-                    "HDMI 7",                    
-                    "Digital 1",
-                    "Digital 2",
-                    "Digital 3",
-                    "Digital 4",
-                    "Analog 1",
-                    "Analog 2",
-                    "Analog 3",
-                    "Dante",
-                    "eArc",
-                ],
+                SOURCE_LIST=list(self._default_inputs),
                 SOUND_MODE="",
                 SOUND_MODE_LIST=[
                     "Direct Mode",
@@ -173,6 +170,7 @@ class Apr16(StatelessHTTPDevice):
         :return: Current MediaPlayerAttributes, or None if unknown
         """
         return self._media_player_attributes.get(device_id)
+
 
     # =========================================================================
     # Connection Management
@@ -289,6 +287,17 @@ class Apr16(StatelessHTTPDevice):
                 current_vol,
                 current_mute,
             )
+
+            # --- Fetch dynamic device configurations upon successful connection ---
+            try:
+                await asyncio.gather(
+                    self.async_fetch_dynamic_inputs(),
+                    self.async_fetch_dirac_slot_names(),
+                    return_exceptions=True
+                )
+                _LOG.debug("[%s] Successfully fetched dynamic input and Dirac slot maps.", self.log_id)
+            except Exception as fetch_err:
+                _LOG.debug("[%s] Error fetching dynamic configuration maps: %s", self.log_id, fetch_err)
 
         except Exception as err:
             _LOG.error(
@@ -587,16 +596,93 @@ class Apr16(StatelessHTTPDevice):
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                # Adjust key based on exact API JSON response structure (e.g., 'source' or 'input')
                 return str(data.get("source", data.get("input", "")))
 
+    async def async_fetch_dynamic_inputs(self) -> dict[int, str]:
+        """Fetch custom input names, falling back gracefully for unavailable ports."""
+        input_names: dict[int, str] = {}
+        async with aiohttp.ClientSession() as session:
+            for inp_id in range(1, 17):
+                url = f"{self._base_url}/api/atlas/input/name?input={inp_id}"
+                try:
+                    async with session.get(
+                        url,
+                        headers={"accept": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=1.0),
+                    ) as resp:
+                        if resp.status == 200:
+                            res_json = await resp.json()
+                            name = res_json.get("name") if isinstance(res_json, dict) else None
+                            if isinstance(name, str) and name.strip():
+                                input_names[inp_id] = name.strip()
+                except (aiohttp.ClientError, TimeoutError, OSError) as err:
+                    _LOG.debug("Failed or stopped fetching input name for input %d: %s", inp_id, err)
+                    break
+
+        self._input_names_map = input_names
+
+        attrs = self._media_player_attributes.get(self.identifier)
+        if attrs:
+            attrs.SOURCE_LIST = [
+                input_names.get(input_id, self._default_inputs[input_id - 1])
+                for input_id in range(1, len(self._default_inputs) + 1)
+            ]
+            self.update()
+        return input_names
+
+    async def get_active_input_name(self) -> str:
+        """Get the friendly active input name using custom user-defined names if available."""
+        raw_input = await self.get_active_input()
+        if not raw_input:
+            return "Unknown"
+
+        attrs = self._media_player_attributes.get(self.identifier)
+        if not attrs or not attrs.SOURCE_LIST:
+            return raw_input
+
+        # Handle numeric index return
+        if raw_input.isdigit():
+            idx = int(raw_input) - 1
+            if 0 <= idx < len(attrs.SOURCE_LIST):
+                return attrs.SOURCE_LIST[idx]
+
+        # Handle string matching against default ports to map to custom SOURCE_LIST index
+        for idx, default_name in enumerate(self._default_inputs):
+            if raw_input.casefold() == default_name.casefold() and idx < len(attrs.SOURCE_LIST):
+                return attrs.SOURCE_LIST[idx]
+
+        return raw_input
+    
     async def set_active_input(self, source: str) -> None:
         """Switch the active audio/video input source via POST /api/atlas/input/active."""
-        _LOG.debug("[%s] Setting active input to: %s", self.log_id, source)
+        _LOG.debug("[%s] Setting active input, incoming source: %s", self.log_id, source)
+
+        target_key = source
+        clean_source = source.strip().casefold()
+
+        # 1. Check if incoming source matches a custom user-defined name in _input_names_map
+        matched_id = None
+        if hasattr(self, "_input_names_map") and self._input_names_map:
+            for inp_id, custom_name in self._input_names_map.items():
+                if custom_name.strip().casefold() == clean_source:
+                    matched_id = inp_id
+                    break
+
+        if matched_id is not None and 1 <= matched_id <= len(self._default_inputs):
+            target_key = self._default_inputs[matched_id - 1]
+        else:
+            # 2. Fallback: normalize casing against _default_inputs (e.g., "Hdmi 3" -> "HDMI 3")
+            for default_name in self._default_inputs:
+                if default_name.casefold() == clean_source:
+                    target_key = default_name
+                    break
+
+        _LOG.debug("[%s] Resolved '%s' -> hardware key '%s'", self.log_id, source, target_key)
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self._base_url}/api/atlas/input/active",
-                json={"input": source},
+                json={"input": target_key},
             ) as resp:
                 resp.raise_for_status()
 
@@ -614,6 +700,143 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
                 return await resp.json()
 
+    
+    # =========================================================================
+    # Dirac Slot Management via Atlas Binary RPC (Port 80)
+    # =========================================================================
+    async def async_get_dirac_active_slot(self) -> int:
+        """Query the hardware live for the active Dirac slot index via binary response parsing."""
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracActiveSlot"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                    body = await response.read()
+                    if response.status == 200:
+                        if not body:
+                            return 0
+                        if len(body) >= 2 and body[0] == 0x08:
+                            return body[1]
+        except Exception as err:
+            _LOG.debug("[%s] GetDiracActiveSlot failed: %s", self.log_id, err)
+                
+        return 0
+    
+    async def async_fetch_dirac_slot_names(self) -> dict[int, str]:
+        """Fetch custom Dirac slot profile names via port 80 GetDiracFilterSlots."""
+        slot_names: dict[int, str] = {}
+        
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+        
+        if not host_ip:
+            _LOG.error("[%s] async_fetch_dirac_slot_names error: Could not extract hostname from _base_url!", self.log_id)
+            return slot_names
+
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/GetDiracFilterSlots"
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+            "Origin": f"http://{host_ip}:80",
+            "Referer": f"http://{host_ip}:80/",
+            "User-Agent": "UnfoldedCircle-HyperionIntegration/1.0",
+        }
+        
+        cookies = {}
+        if hasattr(self, "session_cookie") and self.session_cookie:
+            cookies["atlas_served_asset_session"] = self.session_cookie
+            cookies["forceUpdate"] = "true"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, cookies=cookies, data=b"", timeout=3.0) as response:
+                    body = await response.read()
+                    _LOG.debug("[%s] GetDiracFilterSlots HTTP Status: %d, Body length: %d bytes", self.log_id, response.status, len(body))
+                    
+                    if response.status == 200 and body:
+                        extracted_slots = re.findall(b'\x0b([^\x1a]+)\x1a', body)
+                        
+                        cleaned_slots = []
+                        for s in extracted_slots:
+                            try:
+                                cleaned = s.decode('utf-8', errors='ignore').strip()
+                                cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', cleaned)
+                                if cleaned and cleaned not in cleaned_slots:
+                                    cleaned_slots.append(cleaned)
+                            except Exception:
+                                continue
+                        
+                        for idx, name in enumerate(cleaned_slots, start=1):
+                            slot_names[idx] = name
+                            _LOG.debug("[%s] Mapped Slot %d -> '%s'", self.log_id, idx, name)
+        except Exception as err:
+            _LOG.error("[%s] Failed to fetch dynamic Dirac slot names from port 80: %s", self.log_id, err)
+
+        self._dirac_slot_names_map = slot_names
+        _LOG.debug("[%s] Final Dirac Slot Names Map: %s", self.log_id, slot_names)
+        return slot_names
+    
+    async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
+        """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
+        payload_map = {
+            0: bytes.fromhex("1001"),
+            1: bytes.fromhex("08011001"),
+            2: bytes.fromhex("08021001"),
+        }
+        inner_payload = payload_map.get(slot_index, bytes.fromhex("1001"))
+            
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFilterSlot"
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
+                    return resp.status < 400
+        except Exception as err:
+            _LOG.error("[%s] SetDiracFilterSlot failed: %s", self.log_id, err)
+            return False
+    
+    async def async_set_dirac_filtering(self, enabled: bool) -> bool:
+        """Enable or disable master Dirac filtering using hex-decoded bytes."""
+        inner_payload = (
+            bytes.fromhex("080110011801") if enabled else bytes.fromhex("10011801")
+        )
+            
+        from urllib.parse import urlparse
+        parsed = urlparse(self._base_url)
+        host_ip = parsed.hostname
+    
+        url = f"http://{host_ip}:80/commands.v1.AtlasService/SetDiracFiltering"
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=inner_payload, timeout=5.0) as resp:
+                    return resp.status < 400
+        except Exception as err:
+            _LOG.error("[%s] SetDiracFiltering failed: %s", self.log_id, err)
+            return False
+    
     # =========================================================================
     # Audio Status, Formats & Processing Modes
     # =========================================================================
@@ -735,6 +958,7 @@ class Apr16(StatelessHTTPDevice):
                 _LOG.debug("[%s] System status: %s", self.log_id, status)
             case _:
                 _LOG.warning("Unknown command: %s", command)
+
 
         # TODO: Implement command routing, update _media_player_attributes, then call push_update()
         # Example:

@@ -15,6 +15,11 @@ from device import Apr16
 
 _LOG = logging.getLogger(__name__)
 
+SLOT_DISPLAY_NAMES = {
+    0: "Slot 0 (Default/Bypass)",
+    1: "Slot 1",
+    2: "Slot 2",
+}
 
 class Apr16AbsoluteVolumeSensor(SensorEntity):
     """Sensor entity for displaying the absolute volume level (0-100% scale)."""
@@ -124,7 +129,7 @@ class Apr16MuteSensor(SensorEntity):
             f"sensor.{device_config.identifier}.mute",
             f"{device_config.name} Mute",
             [],
-            {Attributes.STATE: States.ON, Attributes.VALUE: "False"},
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unmuted"},
             device_class=DeviceClasses.CUSTOM,
         )
         self._device = device
@@ -137,9 +142,10 @@ class Apr16MuteSensor(SensorEntity):
             return
         try:
             muted = await self._device.get_mute()
-            self.update({Attributes.STATE: States.ON, Attributes.VALUE: str(muted)})
+            display_val = "Muted" if muted else "Unmuted"
+            self.update({Attributes.STATE: States.ON, Attributes.VALUE: display_val})
         except Exception as err:
-            _LOG.debug("[%s] Failed to update mute sensor: %s", self.identifier, err)
+            _LOG.debug("[%s] Failed to update mute sensor: %s", self.entity_id, err)
 
 
 class Apr16DisplayBrightnessSensor(SensorEntity):
@@ -281,7 +287,6 @@ class Apr16InputTrebleSensor(SensorEntity):
         except Exception as err:
             _LOG.debug("[%s] Failed to update input treble sensor: %s", self.identifier, err)
 
-
 class Apr16VideoDetailSensor(SensorEntity):
     """Sensor entity for displaying active video resolution and HDR details."""
 
@@ -321,3 +326,107 @@ class Apr16VideoDetailSensor(SensorEntity):
             })
         except Exception as err:
             _LOG.debug("[%s] Failed to update video detail sensor: %s", self.identifier, err)
+
+class Apr16DiracSlotSensor(SensorEntity):
+    """
+    Sensor entity reporting active Dirac filter slot index and display name.
+    """
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.dirac_active_slot",
+            f"{device_config.name} Active Dirac Slot",
+            None,
+            {
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: "Slot 0 (Default/Bypass)",
+            },
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        """Synchronize active Dirac slot sensor state with the device."""
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            slot_idx = await self._device.async_get_dirac_active_slot()
+            
+            # Pull from the device's dynamic slot name map
+            slot_names = getattr(self._device, "_dirac_slot_names_map", {0: "Slot 0 (Default/Bypass)"})
+            
+            # Robust lookup supporting both int and str keys, with clean fallback
+            display_value = (
+                slot_names.get(slot_idx) 
+                or slot_names.get(str(slot_idx)) 
+                or slot_names.get(int(slot_idx) if str(slot_idx).isdigit() else None)
+                or f"Slot {slot_idx}"
+            )
+            
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: display_value,
+            })
+        except Exception as err:
+            _LOG.debug("[%s] Failed to sync Dirac slot sensor: %s", self.log_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+
+class Apr16AudioModeSensor(SensorEntity):
+    """Sensor entity for displaying the active audio processing mode."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.audio_mode",
+            f"{device_config.name} Audio Mode",
+            [],
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unknown"},
+            device_class=DeviceClasses.CUSTOM,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            mode = await self._device.get_audio_mode()
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: str(mode) if mode else "Unknown"
+            })
+        except Exception as err:
+            _LOG.error("[%s] Failed to update audio mode sensor: %s", self.entity_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+
+class Apr16ActiveInputSensor(SensorEntity):
+    """Sensor entity for displaying the user-defined active input source."""
+
+    def __init__(self, device_config, device: Apr16):
+        super().__init__(
+            f"sensor.{device_config.identifier}.active_input",
+            f"{device_config.name} Active Input",
+            [],
+            {Attributes.STATE: States.ON, Attributes.VALUE: "Unknown"},
+            device_class=DeviceClasses.CUSTOM,
+        )
+        self._device = device
+        self._device_config = device_config
+        self.subscribe_to_device(device)
+
+    async def sync_state(self) -> None:
+        if not self._device.is_connected:
+            self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+        try:
+            active_name = await self._device.get_active_input_name()
+            self.update({
+                Attributes.STATE: States.ON,
+                Attributes.VALUE: str(active_name) if active_name else "Unknown"
+            })
+        except Exception as err:
+            _LOG.error("[%s] Failed to update active input sensor: %s", self.entity_id, err)
+            self.update({Attributes.STATE: States.UNAVAILABLE})
