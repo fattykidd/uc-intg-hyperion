@@ -659,10 +659,11 @@ class Apr16(StatelessHTTPDevice):
         
         target_key = source
         if hasattr(self, "_input_names_map") and self._input_names_map:
-            forward_map = {k.lower(): k for k in self._input_names_map.keys()}
-            reverse_map = {v.lower(): k for k, v in self._input_names_map.items()}
+            # Safely cast keys and values to strings before lowercasing
+            forward_map = {str(k).lower(): k for k in self._input_names_map.keys()}
+            reverse_map = {str(v).lower(): k for k, v in self._input_names_map.items()}
             
-            clean_name = source.lower()
+            clean_name = str(source).lower()
             if clean_name in reverse_map:
                 target_key = reverse_map[clean_name]
             elif clean_name in forward_map:
