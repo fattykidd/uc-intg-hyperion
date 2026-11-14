@@ -58,6 +58,7 @@ class FakeApr16:
             "sample": 48000,
             "dirac": False,  # master Dirac filtering
             "slot": 0,  # active Dirac slot
+            "format": "Dolby Atmos",
         }
         self.input_names = {1: "Apple TV", 3: "PS5"}
 
@@ -165,7 +166,7 @@ class FakeApr16:
             "/v1/vol": {"level": state["vol"]},
             "/v1/mute": {"state": state["mute"]},
             "/v1/audiomode": {"mode": state["mode"]},
-            "/v1/audioformat": {"format": "Dolby Atmos"},
+            "/v1/audioformat": {"format": state["format"]},
             "/v1/audiodetail": {"summary": "PCM 48k"},
             "/v1/bit": {"bit": state["bit"]},
             "/v1/sample": {"sample": state["sample"]},

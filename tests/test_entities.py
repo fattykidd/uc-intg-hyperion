@@ -192,7 +192,7 @@ async def test_the_dirac_switch_and_sensor_show_the_devices_filtering_state(monk
     rig = await make_rig(monkeypatch, dirac=True)
 
     assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "ON"
-    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On"
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "Active"
 
 
 async def test_the_dirac_switch_and_sensor_show_filtering_off(monkeypatch):
@@ -209,7 +209,7 @@ async def test_toggling_the_dirac_switch_changes_the_device(monkeypatch):
     assert await rig.command(switch, "toggle") == StatusCodes.OK
     await settle()
     assert rig.apr.state["dirac"] is True
-    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On"
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "Active"
 
     assert await rig.command(switch, "toggle") == StatusCodes.OK
     await settle()

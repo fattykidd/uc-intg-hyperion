@@ -375,7 +375,7 @@ async def test_dirac_filtering_changed_in_the_web_ui_reaches_the_remote(monkeypa
     rig.apr.state["dirac"] = True
 
     await wait_until(lambda: rig.remote.last("switch.dev1.dirac_filtering", "state") == "ON")
-    await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On")
+    await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_filtering", "value") == "Active")
 
 
 async def test_a_dirac_slot_changed_in_the_web_ui_reaches_the_remote(monkeypatch, fast_polling):
@@ -386,6 +386,26 @@ async def test_a_dirac_slot_changed_in_the_web_ui_reaches_the_remote(monkeypatch
 
     await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_active_slot", "value") == "2dB current")
     await wait_until(lambda: rig.remote.last("select.dev1.dirac_slot", "current_option") == "2dB current")
+
+
+async def test_a_new_audio_signal_reaches_the_sensors_without_waiting_for_the_full_refresh(monkeypatch, fast_polling):
+    rig = await make_rig(monkeypatch, bit=0, sample=0, format="PCM")
+    assert rig.remote.last("sensor.dev1.audio_sample_rate", "value") == "No Signal"
+
+    rig.apr.state.update(bit=24, sample=96000, format="Dolby TrueHD")
+
+    await wait_until(lambda: rig.remote.last("sensor.dev1.audio_sample_rate", "value") == "96 kHz")
+    await wait_until(lambda: rig.remote.last("sensor.dev1.audio_bit_depth", "value") == "24-bit")
+    await wait_until(lambda: rig.remote.last("sensor.dev1.audio_format", "value") == "Dolby TrueHD")
+
+
+async def test_a_failed_signal_read_keeps_the_last_known_signal(monkeypatch):
+    rig = await make_rig(monkeypatch, sample=48000)
+    rig.apr.failing.add("/v1/sample")
+
+    await rig.device.refresh_state()
+
+    assert rig.device.audio_signal.sample_rate == 48000
 
 
 async def test_nothing_is_pushed_while_nothing_changes(monkeypatch, fast_polling):

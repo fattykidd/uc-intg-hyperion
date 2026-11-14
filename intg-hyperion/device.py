@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from asyncio import AbstractEventLoop
-from typing import Any
+from typing import Any, NamedTuple
 
 import aiohttp
 from ucapi import media_player
@@ -44,6 +44,14 @@ from volume import percent_to_db, step_percent
 _LOG = logging.getLogger(__name__)
 
 INPUT_ACTIVE_PATH = "/api/atlas/input/active"
+
+
+class AudioSignal(NamedTuple):
+    """The incoming audio signal as the device last reported it (bit depth and rate are 0 with no signal)."""
+
+    codec: str
+    bit_depth: int
+    sample_rate: int
 
 
 class Apr16(StatelessHTTPDevice):
@@ -87,6 +95,7 @@ class Apr16(StatelessHTTPDevice):
 
         self._dirac_filtering: bool | None = None  # None until the device has been read
         self._dirac_slot: int | None = None
+        self._audio_signal: AudioSignal | None = None
 
         self._poll_task: asyncio.Task | None = None
 
@@ -153,6 +162,11 @@ class Apr16(StatelessHTTPDevice):
     def dirac_slot_names(self) -> dict[int, str]:
         """Return Dirac slot index -> name. Placeholder names until the device has been read."""
         return self._dirac_slot_names_map
+
+    @property
+    def audio_signal(self) -> AudioSignal | None:
+        """The incoming audio signal, or None if it hasn't been read from the device yet."""
+        return self._audio_signal
 
     @property
     def dirac_slot(self) -> int | None:
@@ -261,12 +275,12 @@ class Apr16(StatelessHTTPDevice):
 
     async def refresh_state(self) -> bool:
         """
-        Read power, volume, mute, input and audio mode from the device into the cached attributes.
+        Read power, volume, mute, input, audio mode, Dirac and the audio signal from the device into the cached attributes.
 
         Returns True if anything the media player shows has changed. Does not notify the remote.
         """
         attrs = self._media_player_attributes[self.identifier]
-        before = (attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering, self._dirac_slot)
+        before = (attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering, self._dirac_slot, self._audio_signal)
         changes_at_start = self._vol_changes
 
         is_on = await self.get_system_power() == "1"
@@ -284,6 +298,15 @@ class Apr16(StatelessHTTPDevice):
         except Exception as err:  # Dirac is not essential: keep what we knew
             _LOG.debug("[%s] Could not read Dirac state: %s", self.log_id, err)
 
+        try:
+            self._audio_signal = AudioSignal(
+                *await asyncio.gather(
+                    self.get_audio_format(), self.get_audio_bit_depth(), self.get_audio_sample_rate()
+                )
+            )
+        except Exception as err:  # keep what we knew
+            _LOG.debug("[%s] Could not read the audio signal: %s", self.log_id, err)
+
         attrs.STATE = media_player.States.ON if is_on else media_player.States.OFF
         attrs.MUTED = muted
         attrs.SOURCE = source
@@ -296,7 +319,7 @@ class Apr16(StatelessHTTPDevice):
 
         return before != (
             attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE,
-            self._dirac_filtering, self._dirac_slot,
+            self._dirac_filtering, self._dirac_slot, self._audio_signal,
         )
 
     def _start_polling(self) -> None:

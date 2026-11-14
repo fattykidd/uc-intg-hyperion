@@ -133,7 +133,8 @@ class Apr16AudioFormatSensor(Apr16Sensor):
     label = "Audio Format"
 
     async def read(self) -> str:
-        return await self._device.get_audio_format() or "Unknown"
+        signal = self._device.audio_signal
+        return (signal.codec if signal else None) or "Unknown"
 
 
 class Apr16AudioDetailSensor(Apr16Sensor):
@@ -154,10 +155,11 @@ class Apr16AudioBitDepthSensor(Apr16Sensor):
 
     suffix = "audio_bit_depth"
     label = "Audio Bit Depth"
-    initial = "No Signal"
+    initial = "Unknown"
 
     async def read(self) -> str:
-        return format_bit_depth(await self._device.get_audio_bit_depth())
+        signal = self._device.audio_signal
+        return format_bit_depth(signal.bit_depth) if signal else "Unknown"
 
 
 class Apr16AudioSampleRateSensor(Apr16Sensor):
@@ -165,10 +167,11 @@ class Apr16AudioSampleRateSensor(Apr16Sensor):
 
     suffix = "audio_sample_rate"
     label = "Audio Sample Rate"
-    initial = "No Signal"
+    initial = "Unknown"
 
     async def read(self) -> str:
-        return format_sample_rate(await self._device.get_audio_sample_rate())
+        signal = self._device.audio_signal
+        return format_sample_rate(signal.sample_rate) if signal else "Unknown"
 
 
 class Apr16VideoDetailSensor(Apr16Sensor):
@@ -261,7 +264,9 @@ class Apr16DiracFilteringSensor(Apr16Sensor):
 
     async def read(self) -> str:
         filtering = self._device.dirac_filtering
-        return "Unknown" if filtering is None else ("Active" if filtering else "Off")
+        if filtering is None:
+            return "Unknown"
+        return "Active" if filtering else "Off"
 
 
 # --- System -----------------------------------------------------------------
