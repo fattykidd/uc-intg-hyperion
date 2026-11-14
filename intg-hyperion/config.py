@@ -1,39 +1,31 @@
-# config.py
+"""Device configuration for the AudioControl Hyperion APR-16 integration."""
+
 from dataclasses import dataclass
+
 from ucapi_framework import BaseConfigManager
+
+from const import DEFAULT_PORT, VOLUME_MODE_ABSOLUTE
+
 
 @dataclass
 class APR16Config:
-    """
-    Device configuration dataclass.
-
-    This dataclass holds all the configuration needed to connect to and
-    identify a device. Add or remove fields as needed for your device.
-    """
+    """Everything needed to find and talk to one APR-16."""
 
     identifier: str
-    """Unique identifier of the device (e.g., MAC address, serial number)."""
+    """Unique identifier of the device (serial number, MAC address or address)."""
 
     name: str
-    """Friendly name of the device for display purposes."""
+    """Friendly name shown on the remote."""
 
     address: str
     """IP address or hostname of the device."""
 
-    # TODO: Add any additional configuration fields your device needs
-    # Examples:
-    port: int = 8080
-    """Port number for device communication."""
+    port: int = DEFAULT_PORT
+    """HTTP port of the device's REST API."""
 
-    volume_mode: str = "absolute"
-    """Volume control mode: 'absolute' for percentage, 'relative' for decibels."""
-    # username: str = ""
-    # """Username for authentication (if required)."""
-    # password: str = ""
-    # """Password for authentication (if required)."""
-    # model: str = ""
-    # """Device model for feature detection."""
+    volume_mode: str = VOLUME_MODE_ABSOLUTE
+    """Volume style on the remote: 'absolute' for percent, 'relative' for decibels."""
+
 
 class APR16ConfigManager(BaseConfigManager[APR16Config]):
     """Configuration manager with automatic JSON persistence."""
-    pass

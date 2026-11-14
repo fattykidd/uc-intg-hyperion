@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from ucapi import StatusCodes
-from ucapi.switch import Attributes, Commands, States
+from ucapi.switch import Attributes, States
 from ucapi_framework import SwitchEntity
 from device import Apr16
 
