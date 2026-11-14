@@ -14,6 +14,7 @@ import re
 # RPC method names on commands.v1.AtlasService
 GET_ACTIVE_SLOT = "GetDiracActiveSlot"
 GET_FILTER_SLOTS = "GetDiracFilterSlots"
+GET_FILTERING = "GetDiracFiltering"
 SET_FILTER_SLOT = "SetDiracFilterSlot"
 SET_FILTERING = "SetDiracFiltering"
 
@@ -47,11 +48,21 @@ def parse_active_slot(body: bytes) -> int:
     return 0
 
 
+def parse_filtering(body: bytes) -> bool:
+    """
+    Read whether Dirac filtering is on from a GetDiracFiltering reply.
+
+    The reply is field 1 as a boolean (``08 01`` for on, followed by constant fields). Protobuf leaves
+    out zero values, so an empty reply means off.
+    """
+    return len(body) >= 2 and body[0] == 0x08 and body[1] != 0
+
+
 def parse_slot_names(body: bytes) -> dict[int, str]:
-    """Pull the user-defined slot names out of a GetDiracFilterSlots reply, numbered from 1."""
+    """Pull the user-defined slot names out of a GetDiracFilterSlots reply. The first name is slot 0."""
     names: list[str] = []
     for raw in _SLOT_NAME_PATTERN.findall(body):
         cleaned = _CONTROL_CHARS.sub("", raw.decode("utf-8", errors="ignore").strip())
         if cleaned and cleaned not in names:
             names.append(cleaned)
-    return dict(enumerate(names, start=1))
+    return dict(enumerate(names))

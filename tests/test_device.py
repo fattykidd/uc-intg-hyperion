@@ -241,8 +241,8 @@ async def test_dirac_slot_names_are_read_from_the_processor(monkeypatch):
     rig = await make_rig(monkeypatch)
     rig.apr.atlas_replies["GetDiracFilterSlots"] = (200, b"\x0bMovies\x1a\x0bMusic\x1a")
 
-    assert await rig.device.async_fetch_dirac_slot_names() == {1: "Movies", 2: "Music"}
-    assert rig.device.dirac_slot_names == {1: "Movies", 2: "Music"}
+    assert await rig.device.async_fetch_dirac_slot_names() == {0: "Movies", 1: "Music"}
+    assert rig.device.dirac_slot_names == {0: "Movies", 1: "Music"}
 
 
 @pytest.mark.parametrize("reply", [(200, b""), (500, b""), (200, b"\x00\x01")])
@@ -356,6 +356,15 @@ async def test_sensors_follow_a_change_made_on_the_device(monkeypatch, fast_poll
     rig.apr.state["vol"] = 40
 
     await wait_until(lambda: rig.remote.last("sensor.dev1.volume_absolute", "value") == "40.0")
+
+
+async def test_dirac_filtering_changed_in_the_web_ui_reaches_the_remote(monkeypatch, fast_polling):
+    rig = await make_rig(monkeypatch, dirac=False)
+
+    rig.apr.state["dirac"] = True
+
+    await wait_until(lambda: rig.remote.last("switch.dev1.dirac_filtering", "state") == "ON")
+    await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On")
 
 
 async def test_nothing_is_pushed_while_nothing_changes(monkeypatch, fast_polling):

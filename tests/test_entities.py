@@ -25,6 +25,9 @@ EXPECTED_ENTITIES = {
     "sensor.dev1.mute": "APR Mute",
     "sensor.dev1.display_brightness": "APR Display Brightness",
     "sensor.dev1.audio_detail": "APR Audio Signal",
+    "sensor.dev1.dirac_filtering": "APR Dirac Filtering Status",
+    "sensor.dev1.audio_bit_depth": "APR Audio Bit Depth",
+    "sensor.dev1.audio_sample_rate": "APR Audio Sample Rate",
     "sensor.dev1.host_ip": "APR Host IP",
     "sensor.dev1.input_bass": "APR Input Bass",
     "sensor.dev1.input_treble": "APR Input Treble",
@@ -57,14 +60,17 @@ SENSOR_VALUES = {
     "mute": "Unmuted",
     "host_ip": "10.0.0.5",
     "display_brightness": "50",
-    "audio_mode": "2ch",
+    "audio_mode": "Stereo",
+    "dirac_filtering": "Off",
+    "audio_bit_depth": "24-bit",
+    "audio_sample_rate": "48 kHz",
     "audio_format": "Dolby Atmos",
     "audio_detail": "PCM 48k",
     "video_detail": "4K @ 60 (HDR10)",
     "active_input": "HDMI 2",
     "input_bass": "11",
     "input_treble": "-3",
-    "dirac_active_slot": "Slot 0 (Default/Bypass)",
+    "dirac_active_slot": "Slot 0",
 }
 
 
@@ -109,6 +115,124 @@ async def test_sensors_are_unavailable_once_the_device_disconnects(monkeypatch):
     for name in SENSOR_VALUES:
         await rig.entity("sensor", name).sync_state()
         assert rig.remote.last(f"sensor.dev1.{name}", "state") == "UNAVAILABLE", name
+
+
+@pytest.mark.parametrize(("raw", "friendly"), [("dts-nx", "DTS Neural:X"), ("multich", "All Channel Stereo"), ("native", "Native")])
+async def test_the_audio_mode_sensor_uses_the_same_names_as_the_select(monkeypatch, raw, friendly):
+    rig = await make_rig(monkeypatch, mode=raw)
+
+    assert rig.remote.last("sensor.dev1.audio_mode", "value") == friendly
+    await rig.entity("select", "audio_mode").sync_state()
+    assert rig.remote.last("select.dev1.audio_mode", "current_option") == friendly
+
+
+async def test_the_audio_mode_sensor_shows_a_mode_it_does_not_know_as_reported(monkeypatch):
+    rig = await make_rig(monkeypatch, mode="some-new-mode")
+
+    assert rig.remote.last("sensor.dev1.audio_mode", "value") == "some-new-mode"
+
+
+@pytest.mark.parametrize(
+    ("bit", "sample", "shown_bit", "shown_rate"),
+    [(16, 44100, "16-bit", "44.1 kHz"), (24, 96000, "24-bit", "96 kHz"), (32, 192000, "32-bit", "192 kHz"), (0, 0, "No Signal", "No Signal")],
+)
+async def test_bit_depth_and_sample_rate_sensors(monkeypatch, bit, sample, shown_bit, shown_rate):
+    rig = await make_rig(monkeypatch, bit=bit, sample=sample)
+
+    assert rig.remote.last("sensor.dev1.audio_bit_depth", "value") == shown_bit
+    assert rig.remote.last("sensor.dev1.audio_sample_rate", "value") == shown_rate
+
+
+# The processor's three Dirac slots are numbered from 0, and the first name it lists belongs to slot 0.
+SLOT_NAMES_REPLY = b"\x0b4dB current\x1a\x0b2dB current\x1a\x0b6dB current\x1a"
+
+
+async def rig_with_named_slots(monkeypatch):
+    rig = await make_rig(monkeypatch)
+    rig.apr.atlas_replies["GetDiracFilterSlots"] = (200, SLOT_NAMES_REPLY)
+    await rig.device.async_fetch_dirac_slot_names()
+    return rig
+
+
+@pytest.mark.parametrize(("slot_reply", "name"), [((200, b""), "4dB current"), ((200, b"\x08\x01"), "2dB current"), ((200, b"\x08\x02"), "6dB current")])
+async def test_the_active_dirac_slot_sensor_names_the_right_slot(monkeypatch, slot_reply, name):
+    rig = await rig_with_named_slots(monkeypatch)
+    rig.apr.atlas_replies["GetDiracActiveSlot"] = slot_reply
+
+    await rig.entity("sensor", "dirac_active_slot").sync_state()
+    await rig.entity("select", "dirac_slot").sync_state()
+
+    assert rig.remote.last("sensor.dev1.dirac_active_slot", "value") == name
+    assert rig.remote.last("select.dev1.dirac_slot", "current_option") == name
+    assert rig.remote.last("select.dev1.dirac_slot", "options") == ["4dB current", "2dB current", "6dB current"]
+
+
+@pytest.mark.parametrize(("name", "payload"), [("4dB current", "1001"), ("2dB current", "08011001"), ("6dB current", "08021001")])
+async def test_choosing_a_dirac_slot_by_name_selects_that_slot(monkeypatch, name, payload):
+    rig = await rig_with_named_slots(monkeypatch)
+
+    assert await rig.command(rig.entity("select", "dirac_slot"), "select_option", {"option": name}) == StatusCodes.OK
+
+    assert rig.apr.rpcs[-1] == ("SetDiracFilterSlot", bytes.fromhex(payload))
+
+
+async def test_the_dirac_switch_and_sensor_show_the_devices_filtering_state(monkeypatch):
+    rig = await make_rig(monkeypatch, dirac=True)
+
+    assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "ON"
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On"
+
+
+async def test_the_dirac_switch_and_sensor_show_filtering_off(monkeypatch):
+    rig = await make_rig(monkeypatch, dirac=False)
+
+    assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "OFF"
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "Off"
+
+
+async def test_toggling_the_dirac_switch_changes_the_device(monkeypatch):
+    rig = await make_rig(monkeypatch, dirac=False)
+    switch = rig.entity("switch", "dirac_filtering")
+
+    assert await rig.command(switch, "toggle") == StatusCodes.OK
+    await settle()
+    assert rig.apr.state["dirac"] is True
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On"
+
+    assert await rig.command(switch, "toggle") == StatusCodes.OK
+    await settle()
+    assert rig.apr.state["dirac"] is False
+    assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "OFF"
+
+
+async def test_a_refused_dirac_command_leaves_the_state_alone(monkeypatch):
+    rig = await make_rig(monkeypatch, dirac=False)
+    rig.apr.atlas_replies["SetDiracFiltering"] = (500, b"")
+
+    assert await rig.command(rig.entity("switch", "dirac_filtering"), "on") == StatusCodes.SERVER_ERROR
+
+    assert rig.device.dirac_filtering is False
+
+
+async def test_dirac_state_is_unknown_when_the_device_cannot_be_asked(monkeypatch):
+    rig = await make_rig(monkeypatch, connect=False)
+    rig.apr.atlas_replies["GetDiracFiltering"] = (500, b"")
+
+    assert await rig.device.connect()  # Dirac is not essential for connecting
+    await settle()
+
+    assert rig.device.dirac_filtering is None
+    assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "UNKNOWN"
+    assert rig.remote.last("sensor.dev1.dirac_filtering", "value") == "Unknown"
+
+
+async def test_the_dirac_switch_is_unavailable_when_disconnected(monkeypatch):
+    rig = await make_rig(monkeypatch)
+    await rig.device.disconnect()
+
+    await rig.entity("switch", "dirac_filtering").sync_state()
+
+    assert rig.remote.last("switch.dev1.dirac_filtering", "state") == "UNAVAILABLE"
 
 
 # --------------------------------------------------------------------------- buttons
@@ -280,17 +404,6 @@ async def test_the_audio_mode_select_shows_the_friendly_name(monkeypatch):
     await rig.entity("select", "audio_mode").sync_state()
 
     assert rig.remote.last("select.dev1.audio_mode", "current_option") == "DTS Neural:X"
-
-
-async def test_the_dirac_slot_select_switches_slots_by_name(monkeypatch):
-    rig = await make_rig(monkeypatch)
-    rig.apr.atlas_replies["GetDiracFilterSlots"] = (200, b"\x0bMovies\x1a\x0bMusic\x1a")
-    await rig.device.async_fetch_dirac_slot_names()
-    select = rig.entity("select", "dirac_slot")
-
-    assert await rig.command(select, "select_option", {"option": "Music"}) == StatusCodes.OK
-
-    assert rig.apr.rpcs[-1] == ("SetDiracFilterSlot", bytes.fromhex("08021001"))
 
 
 async def test_the_dirac_switch_turns_filtering_on_and_off(monkeypatch):

@@ -54,6 +54,9 @@ class FakeApr16:
             "treble": -3,
             "source": "HDMI 2",
             "mode": "2ch",
+            "bit": 24,
+            "sample": 48000,
+            "dirac": False,  # master Dirac filtering
         }
         self.input_names = {1: "Apple TV", 3: "PS5"}
 
@@ -92,8 +95,16 @@ class FakeApr16:
 
         if path.startswith(ATLAS_PREFIX):
             name = path.removeprefix(ATLAS_PREFIX)
-            self.rpcs.append((name, kwargs.get("data", b"")))
-            return self.atlas_replies.get(name, (200, b""))
+            body = kwargs.get("data", b"")
+            self.rpcs.append((name, body))
+            if name in self.atlas_replies:
+                return self.atlas_replies[name]
+            # Like the real device: filtering is the first field of the reply, and zero values are left out.
+            if name == "GetDiracFiltering":
+                return 200, (bytes.fromhex("080110011801") if self.state["dirac"] else b"")
+            if name == "SetDiracFiltering":
+                self.state["dirac"] = body[:2] == b"\x08\x01"
+            return 200, b""
 
         if path in self.overrides:
             return self.overrides[path]
@@ -151,6 +162,8 @@ class FakeApr16:
             "/v1/audiomode": {"mode": state["mode"]},
             "/v1/audioformat": {"format": "Dolby Atmos"},
             "/v1/audiodetail": {"summary": "PCM 48k"},
+            "/v1/bit": {"bit": state["bit"]},
+            "/v1/sample": {"sample": state["sample"]},
             "/v1/videodetail": {"resolution": "4K", "framerate": "60", "hdr": "hdr10"},
             "/v1/displaybrightness": {"brightness": state["brightness"]},
             "/v1/hostip": {"ip": HOST},

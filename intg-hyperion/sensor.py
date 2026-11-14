@@ -12,10 +12,22 @@ import logging
 from ucapi.sensor import Attributes, DeviceClasses, Options, States
 from ucapi_framework import SensorEntity
 
-from const import DEFAULT_INPUTS
+from const import API_TO_UI_AUDIO_MODE, DEFAULT_INPUTS
 from device import Apr16
 
 _LOG = logging.getLogger(__name__)
+
+
+def format_bit_depth(bits: int) -> str:
+    """16 -> "16-bit". 0 means the device sees no audio signal."""
+    return f"{bits}-bit" if bits > 0 else "No Signal"
+
+
+def format_sample_rate(hertz: int) -> str:
+    """48000 -> "48 kHz", 44100 -> "44.1 kHz". 0 means the device sees no audio signal."""
+    if hertz <= 0:
+        return "No Signal"
+    return f"{hertz / 1000:g} kHz"
 
 
 class Apr16Sensor(SensorEntity):
@@ -137,6 +149,28 @@ class Apr16AudioDetailSensor(Apr16Sensor):
         return details.get("summary", details.get("format", "Active"))
 
 
+class Apr16AudioBitDepthSensor(Apr16Sensor):
+    """Bit depth of the incoming audio signal."""
+
+    suffix = "audio_bit_depth"
+    label = "Audio Bit Depth"
+    initial = "No Signal"
+
+    async def read(self) -> str:
+        return format_bit_depth(await self._device.get_audio_bit_depth())
+
+
+class Apr16AudioSampleRateSensor(Apr16Sensor):
+    """Sample rate of the incoming audio signal."""
+
+    suffix = "audio_sample_rate"
+    label = "Audio Sample Rate"
+    initial = "No Signal"
+
+    async def read(self) -> str:
+        return format_sample_rate(await self._device.get_audio_sample_rate())
+
+
 class Apr16VideoDetailSensor(Apr16Sensor):
     """Active video resolution, frame rate and HDR format."""
 
@@ -156,13 +190,14 @@ class Apr16VideoDetailSensor(Apr16Sensor):
 
 
 class Apr16AudioModeSensor(Apr16Sensor):
-    """Active audio processing mode."""
+    """Active audio processing mode, by the same friendly name the audio mode select uses."""
 
     suffix = "audio_mode"
     label = "Audio Mode"
 
     async def read(self) -> str:
-        return await self._device.get_audio_mode() or "Unknown"
+        mode = await self._device.get_audio_mode()
+        return API_TO_UI_AUDIO_MODE.get(mode, mode) or "Unknown"
 
 
 class Apr16ActiveInputSensor(Apr16Sensor):
@@ -206,12 +241,25 @@ class Apr16DiracSlotSensor(Apr16Sensor):
 
     suffix = "dirac_active_slot"
     label = "Active Dirac Slot"
-    initial = "Slot 0 (Default/Bypass)"
+    initial = "Slot 0"
     device_class = None
 
     async def read(self) -> str:
         slot = await self._device.async_get_dirac_active_slot()
         return self._device.dirac_slot_names.get(slot, f"Slot {slot}")
+
+
+class Apr16DiracFilteringSensor(Apr16Sensor):
+    """Whether Dirac Live room correction is on."""
+
+    suffix = "dirac_filtering"
+    label = "Dirac Filtering Status"
+    initial = "Unknown"
+    device_class = None
+
+    async def read(self) -> str:
+        filtering = self._device.dirac_filtering
+        return "Unknown" if filtering is None else ("On" if filtering else "Off")
 
 
 # --- System -----------------------------------------------------------------

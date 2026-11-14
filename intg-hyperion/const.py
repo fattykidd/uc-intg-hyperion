@@ -64,7 +64,7 @@ API_TO_UI_AUDIO_MODE = {api: ui for ui, api in AUDIO_MODE_MAPPING.items()}
 # --- Dirac Live -------------------------------------------------------------
 # Used until the real slot names have been read from the device.
 DEFAULT_DIRAC_SLOTS: dict[int, str] = {
-    0: "Slot 0 (Default/Bypass)",
+    0: "Slot 0",
     1: "Slot 1",
     2: "Slot 2",
 }

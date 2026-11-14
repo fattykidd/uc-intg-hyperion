@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed volume change now re-reads the real volume from the device instead of leaving a wrong value on the remote.
 
 ### Added
+- Audio Bit Depth, Audio Sample Rate and Dirac Filtering Status sensors (`sensor.<id>.audio_bit_depth`, `audio_sample_rate`, `dirac_filtering`).
 - The device is now polled every 5 seconds (power, volume, mute, input, audio mode), so changes made on the front panel or in the web UI show up on the remote. The remote is only updated when something changed, plus a full sensor refresh every 30 seconds. Intervals are `POLL_INTERVAL` and `FULL_REFRESH_INTERVAL` in `const.py`.
 - A pytest suite (`tests/`, run with `pip install -r test-requirements.txt && pytest`). It runs the real device, client and entities against a fake APR-16 and a fake Remote, and includes a test that talks to a real local aiohttp server.
 
@@ -22,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Volume +1dB / -1dB buttons. The media player's own volume controls cover them.
 
 ### Fixed
+- Dirac slots are numbered from 0, as on the device: the first slot name belongs to slot 0. Names were shown one slot off, and choosing a slot by name selected the wrong slot.
+- The Dirac Filtering switch now shows the device's real filtering state (read with `GetDiracFiltering`) instead of assuming it from the active slot. The poll loop keeps it in step with changes made in the device's web UI.
+- The Audio Mode sensor now shows the same friendly name as the Audio Mode select (for example "DTS Neural:X" instead of "dts-nx").
 - Custom input names now reach the remote right after connecting. The device called an `update()` method that only entities have, and the error was swallowed.
 - A failed sensor read no longer raises inside the sensor's own error handler (it logged `self.entity_id`, which entities don't have). The sensor now shows as unavailable instead.
 - The `volume` command in relative mode no longer raises an error, and refuses positive dB values instead of jumping to 100%.
