@@ -261,7 +261,7 @@ class Apr16DiracFilteringSensor(Apr16Sensor):
 
     async def read(self) -> str:
         filtering = self._device.dirac_filtering
-        return "Unknown" if filtering is None else ("On" if filtering else "Off")
+        return "Unknown" if filtering is None else ("Active" if filtering else "Off")
 
 
 # --- System -----------------------------------------------------------------
