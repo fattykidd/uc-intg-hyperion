@@ -531,19 +531,28 @@ class Apr16(StatelessHTTPDevice):
                 ) as resp:
                     resp.raise_for_status()
         else:
-            # Relative decibel mode: EXACT integer/1-decimal step (e.g. +1.0 or -1.0 dB)
-            current_db = getattr(self, "_current_db", -40.0)
-            if attrs and hasattr(attrs, "VOLUME_DB"):
-                current_db = float(attrs.VOLUME_DB)
+            # Relative decibel mode: pull from the conversion scale / relative volume sensor
+            current_db = -40.0
+            
+            # Look up the relative volume sensor or attribute from your entity state dict
+            rel_sensor_key = f"sensor.{self.identifier}.volume_relative"
+            rel_sensor = self._sensor_attributes.get(rel_sensor_key) if hasattr(self, "_sensor_attributes") else None
+            
+            if rel_sensor and getattr(rel_sensor, "value", None) is not None:
+                try:
+                    current_db = float(rel_sensor.value)
+                except (ValueError, TypeError):
+                    pass
+            elif attrs and hasattr(attrs, "volume_relative"):
+                try:
+                    current_db = float(attrs.volume_relative)
+                except (ValueError, TypeError):
+                    pass
 
-            # Determine direction from delta sign
+            # Force exact +/- 1.0 dB step from the true converted scale
             step = 1.0 if delta > 0 else -1.0
             new_db = round(current_db + step, 1)
             self._current_db = new_db
-
-            if attrs:
-                attrs.VOLUME_DB = new_db
-            self.push_update()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
