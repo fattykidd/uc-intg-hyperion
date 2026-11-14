@@ -19,21 +19,8 @@
       "de": "Integrationssetup",
       "fr": "Configuration de l'intégration"
     },
-    "settings": [
-      {
-        "id": "info",
-        "label": {
-          "en": "Setup process"
-        },
-        "field": {
-          "label": {
-            "value": {
-              "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor."
-            }
-          }
-        }
-      }
-    ]
+    "settings": []
+      
   },
   "release_date": "2026-11-10"
 }
