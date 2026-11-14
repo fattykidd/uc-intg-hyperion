@@ -90,7 +90,7 @@ class Apr16(StatelessHTTPDevice):
         self._volume_pct: int = 0
         self._vol_lock = asyncio.Lock()
         self._session: aiohttp.ClientSession | None = None
-        self._volume_mode: str = "relative"
+        self._volume_mode: str = getattr(device_config, "volume_mode", "absolute")
         
 
         # Cache for custom input names fetched from the device
@@ -289,7 +289,7 @@ class Apr16(StatelessHTTPDevice):
             if not self._vol_lock.locked():
                 self._volume_pct = current_vol
                 self._publish_volume()
-                
+
             _LOG.debug(
                 "[%s] Connection verified. State: %s, Vol: %s, Mute: %s",
                 self.log_id,
