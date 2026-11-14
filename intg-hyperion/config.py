@@ -24,6 +24,9 @@ class APR16Config:
     # Examples:
     port: int = 8080
     """Port number for device communication."""
+
+    volume_mode: str = "absolute"
+    """Volume control mode: 'absolute' for percentage, 'relative' for decibels."""
     # username: str = ""
     # """Username for authentication (if required)."""
     # password: str = ""
