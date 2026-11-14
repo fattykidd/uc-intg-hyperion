@@ -25,8 +25,6 @@ from selector import (
 from button import (
     Apr16RebootButton, 
     Apr16HpdButton,
-    Apr16VolumeUpButton,
-    Apr16VolumeDownButton,
     Apr16InputBassUpButton,
     Apr16InputBassDownButton,
     Apr16InputTrebleUpButton,
@@ -82,8 +80,6 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16ActiveInputSensor,
                 Apr16RebootButton, 
                 Apr16HpdButton,
-                Apr16VolumeUpButton,
-                Apr16VolumeDownButton,
                 Apr16InputBassUpButton,
                 Apr16InputBassDownButton,
                 Apr16InputTrebleUpButton,
