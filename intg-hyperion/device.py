@@ -511,10 +511,12 @@ class Apr16(StatelessHTTPDevice):
 
     async def change_volume(self, delta: float) -> None:
         """Optimistically step volume up or down based on volume mode."""
+        # Force default to relative if not explicitly set to absolute
         volume_mode = getattr(self, "_volume_mode", "relative")
+        is_absolute = volume_mode in ("absolute", "pct", "Abs")
         attrs = self._media_player_attributes.get(self.identifier)
 
-        if volume_mode == "absolute":
+        if is_absolute:
             # Absolute percentage mode (0-100%)
             current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 30.0
             new_vol = max(0.0, min(100.0, current_vol + delta))
@@ -529,15 +531,19 @@ class Apr16(StatelessHTTPDevice):
                 ) as resp:
                     resp.raise_for_status()
         else:
-            # Relative decibel mode (Exact dB integer steps)
+            # Relative decibel mode: EXACT integer/1-decimal step (e.g. +1.0 or -1.0 dB)
             current_db = getattr(self, "_current_db", -40.0)
             if attrs and hasattr(attrs, "VOLUME_DB"):
                 current_db = float(attrs.VOLUME_DB)
 
-            # Force clean integer step (+1.0 or -1.0 dB)
+            # Determine direction from delta sign
             step = 1.0 if delta > 0 else -1.0
             new_db = round(current_db + step, 1)
             self._current_db = new_db
+
+            if attrs:
+                attrs.VOLUME_DB = new_db
+            self.push_update()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
