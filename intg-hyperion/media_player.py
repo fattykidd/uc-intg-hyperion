@@ -12,7 +12,9 @@ from ucapi import StatusCodes
 from ucapi.media_player import Attributes, Commands, DeviceClasses, Features, States
 from ucapi_framework import MediaPlayerEntity
 
+from const import DEFAULT_INPUTS
 from device import Apr16
+from volume import db_to_percent
 
 _LOG = logging.getLogger(__name__)
 
@@ -32,13 +34,6 @@ class Apr16MediaPlayer(MediaPlayerEntity):
         self._device = device
         self._device_config = device_config
 
-        # Pull dynamic input names if available, falling back to empty list or defaults
-        initial_sources = list(device._input_names_map.values()) if hasattr(device, "_input_names_map") and device._input_names_map else [
-            "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7",
-            "Digital 1", "Digital 2", "Digital 3", "Digital 4",
-            "Analog 1", "Analog 2", "Analog 3", "Dante", "eArc",
-        ]
-
         super().__init__(
             f"media_player.{device_config.identifier}",
             device_config.name,
@@ -48,7 +43,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 Attributes.VOLUME: 0,
                 Attributes.MUTED: False,
                 Attributes.SOURCE: "",
-                Attributes.SOURCE_LIST: initial_sources,
+                Attributes.SOURCE_LIST: device.source_list or list(DEFAULT_INPUTS),
             },
             device_class=DeviceClasses.RECEIVER,
             cmd_handler=self._handle_command,
@@ -64,19 +59,16 @@ class Apr16MediaPlayer(MediaPlayerEntity):
 
         attrs = self._device.get_media_player_attributes(self._device_config.identifier)
         if attrs:
-            # Refresh source list dynamically in case custom input map updated post-init
-            current_sources = list(self._device._input_names_map.values()) if hasattr(self._device, "_input_names_map") and self._device._input_names_map else None
-            
-            update_payload = {
-                Attributes.STATE: attrs.STATE,
-                Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
-                Attributes.MUTED: attrs.MUTED,
-                Attributes.SOURCE: attrs.SOURCE,
-            }
-            if current_sources:
-                update_payload[Attributes.SOURCE_LIST] = current_sources
-                
-            self.update(update_payload)
+            self.update(
+                {
+                    Attributes.STATE: attrs.STATE,
+                    Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
+                    Attributes.MUTED: attrs.MUTED,
+                    Attributes.SOURCE: attrs.SOURCE,
+                    # Custom input names can arrive after the entity was created.
+                    Attributes.SOURCE_LIST: self._device.source_list,
+                }
+            )
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
@@ -93,21 +85,20 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 return StatusCodes.OK
 
             if cmd_id == Commands.VOLUME:
-                if params and "volume" in params:
-                    await self._device.set_volume(float(params["volume"]))
-                    return StatusCodes.OK
-                return StatusCodes.BAD_REQUEST
-
-            if cmd_id == Commands.VOLUME_UP:
-                current_vol = await self._device.get_volume()
-                new_vol = max(0.0, min(100.0, (current_vol or 0.0) + 1.0))
-                await self._device.set_volume(int(round(new_vol)))
+                if not params or "volume" not in params:
+                    return StatusCodes.BAD_REQUEST
+                value = float(params["volume"])
+                if self._device.is_relative_volume:
+                    if value > 0:
+                        # A positive dB value would mean "louder than maximum". Refuse it
+                        # rather than letting it clamp to 100 %.
+                        return StatusCodes.BAD_REQUEST
+                    value = db_to_percent(value)
+                await self._device.set_volume_pct(int(round(value)))
                 return StatusCodes.OK
 
-            if cmd_id == Commands.VOLUME_DOWN:
-                current_vol = await self._device.get_volume()
-                new_vol = max(0.0, min(100.0, (current_vol or 0.0) - 1.0))
-                await self._device.set_volume(int(round(new_vol)))
+            if cmd_id in (Commands.VOLUME_UP, Commands.VOLUME_DOWN):
+                await self._device.step_volume(1 if cmd_id == Commands.VOLUME_UP else -1)
                 return StatusCodes.OK
 
             if cmd_id == Commands.MUTE_TOGGLE:

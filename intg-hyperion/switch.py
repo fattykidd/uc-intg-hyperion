@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from ucapi import StatusCodes
-from ucapi.switch import Attributes, Commands, States
+from ucapi.switch import Attributes, States
 from ucapi_framework import SwitchEntity
 from device import Apr16
 
@@ -17,6 +17,8 @@ _LOG = logging.getLogger(__name__)
 class Apr16DiracFilteringSwitch(SwitchEntity):
     """
     Switch entity to toggle master Dirac Live filtering on/off.
+
+    Its state comes from the device (GetDiracFiltering), which the poll loop keeps current.
     """
 
     def __init__(self, device_config, device: Apr16):
@@ -25,7 +27,7 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
             f"{device_config.name} Dirac Filtering",
             features=[],
             attributes={
-                Attributes.STATE: States.ON,
+                Attributes.STATE: States.UNKNOWN,
             },
             cmd_handler=self._handle_command,
         )
@@ -34,17 +36,15 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
         self.subscribe_to_device(device)
 
     async def sync_state(self) -> None:
-        """Synchronize master Dirac filtering state with the device."""
-        try:
-            active_slot = await self._device.async_get_dirac_active_slot()
-            is_enabled = active_slot > 0
-            
-            self.update({
-                Attributes.STATE: States.ON if is_enabled else States.OFF,
-            })
-        except Exception as err:
-            _LOG.debug("[%s] Failed to sync Dirac filtering switch: %s", self._device.log_id, err)
-            self.update({Attributes.STATE: States.UNAVAILABLE})
+        """Show the device's Dirac filtering state, or unavailable while disconnected."""
+        filtering = self._device.dirac_filtering
+        if not self._device.is_connected:
+            state = States.UNAVAILABLE
+        elif filtering is None:
+            state = States.UNKNOWN
+        else:
+            state = States.ON if filtering else States.OFF
+        self.update({Attributes.STATE: state})
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
@@ -57,7 +57,7 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
         if cmd_id == "off":
             target_state = False
         elif cmd_id == "toggle":
-            current_state = self.get_attribute(Attributes.STATE) == States.ON
+            current_state = self._device.dirac_filtering is True
             target_state = not current_state
 
         _LOG.debug(
@@ -72,9 +72,7 @@ class Apr16DiracFilteringSwitch(SwitchEntity):
             if not success:
                 return StatusCodes.SERVER_ERROR
 
-            self.update({
-                Attributes.STATE: States.ON if target_state else States.OFF,
-            })
+            self.update({Attributes.STATE: States.ON if target_state else States.OFF})
             return StatusCodes.OK
         except Exception as err:
             _LOG.error("[%s] Failed to set Dirac filtering switch: %s", self._device.log_id, err)

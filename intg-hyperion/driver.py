@@ -25,8 +25,6 @@ from selector import (
 from button import (
     Apr16RebootButton, 
     Apr16HpdButton,
-    Apr16VolumeUpButton,
-    Apr16VolumeDownButton,
     Apr16InputBassUpButton,
     Apr16InputBassDownButton,
     Apr16InputTrebleUpButton,
@@ -36,6 +34,9 @@ from button import (
 )
 from sensor import (
     Apr16AudioFormatSensor,
+    Apr16DiracFilteringSensor,
+    Apr16AudioBitDepthSensor,
+    Apr16AudioSampleRateSensor,
     Apr16VideoDetailSensor,
     Apr16AbsoluteVolumeSensor,
     Apr16RelativeVolumeSensor,
@@ -69,6 +70,9 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16DiracFilteringSwitch,
                 Apr16DiracSlotSensor,
                 Apr16AudioFormatSensor,
+                Apr16DiracFilteringSensor,
+                Apr16AudioBitDepthSensor,
+                Apr16AudioSampleRateSensor,
                 Apr16VideoDetailSensor,
                 Apr16AbsoluteVolumeSensor,
                 Apr16RelativeVolumeSensor,
@@ -82,8 +86,6 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16ActiveInputSensor,
                 Apr16RebootButton, 
                 Apr16HpdButton,
-                Apr16VolumeUpButton,
-                Apr16VolumeDownButton,
                 Apr16InputBassUpButton,
                 Apr16InputBassDownButton,
                 Apr16InputTrebleUpButton,
@@ -102,10 +104,8 @@ async def main():
 
     # Configure logging level from environment variable
     level = os.getenv("UC_LOG_LEVEL", "DEBUG").upper()
-    logging.getLogger("driver").setLevel(level)
-    logging.getLogger("media_player").setLevel(level)
-    logging.getLogger("device").setLevel(level)
-    logging.getLogger("setup_flow").setLevel(level)
+    for module in ("driver", "media_player", "device", "client", "setup_flow"):
+        logging.getLogger(module).setLevel(level)
 
     # Instantiate our custom driver class
     driver = Apr16Driver()

@@ -1,6 +1,6 @@
 {
   "driver_id": "uc_intg_hyperion",
-  "version": "0.2.0-beta.5",
+  "version": "0.2.2",
   "min_core_api": "0.20.0",
   "name": { "en": "AudioControl Hyperion APR-16" },
   "icon": "custom:wallpaper1.png",
@@ -19,21 +19,8 @@
       "de": "Integrationssetup",
       "fr": "Configuration de l'intégration"
     },
-    "settings": [
-      {
-        "id": "info",
-        "label": {
-          "en": "Setup process"
-        },
-        "field": {
-          "label": {
-            "value": {
-              "en": "Please enter the connection details for your AudioControl Hyperion APR-16 processor."
-            }
-          }
-        }
-      }
-    ]
+    "settings": []
+      
   },
   "release_date": "2026-11-10"
 }

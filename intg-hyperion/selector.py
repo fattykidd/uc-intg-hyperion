@@ -10,32 +10,10 @@ from typing import Any
 from ucapi import StatusCodes
 from ucapi.select import Attributes, Commands, States
 from ucapi_framework import SelectEntity
+from const import API_TO_UI_AUDIO_MODE, AUDIO_MODE_MAPPING, DEFAULT_DIRAC_SLOTS
 from device import Apr16
 
 _LOG = logging.getLogger(__name__)
-
-# Map clean UI display names to the exact backend slot indices
-DIRAC_SLOT_MAPPING = {
-    "Slot 0 (Default/Bypass)": 0,
-    "Slot 1": 1,
-    "Slot 2": 2,
-}
-
-API_TO_UI_DIRAC = {v: k for k, v in DIRAC_SLOT_MAPPING.items()}
-
-# Map clean UI display names to the exact backend API strings
-AUDIO_MODE_MAPPING = {
-    "Direct Mode": "dspdirectmode",
-    "DTS Neural:X": "dts-nx",
-    "Stereo": "2ch",
-    "All Channel Stereo": "multich",
-    "Dolby Mode": "dolby mode",
-    "Native": "native",
-    "Dolby Surround": "dolby surround",
-}
-
-# Reverse mapping to display friendly names from the raw API state
-API_TO_UI_MAPPING = {v: k for k, v in AUDIO_MODE_MAPPING.items()}
 
 class Apr16AudioModeSelect(SelectEntity):
     """
@@ -61,7 +39,7 @@ class Apr16AudioModeSelect(SelectEntity):
         """Synchronize entity state with the device."""
         try:
             raw_mode = await self._device.get_audio_mode()
-            display_option = API_TO_UI_MAPPING.get(raw_mode, "Stereo")
+            display_option = API_TO_UI_AUDIO_MODE.get(raw_mode, "Stereo")
             self.update({
                 Attributes.STATE: States.ON,
                 Attributes.CURRENT_OPTION: display_option,
@@ -100,8 +78,8 @@ class Apr16DiracSlotSelect(SelectEntity):
     Select entity for changing active Dirac Live filter slots with custom profile names.
     """
     def __init__(self, device_config, device: Apr16):
-        # Default fallback options until the first dynamic fetch completes
-        default_options = ["Slot 0 (Default/Bypass)", "Slot 1", "Slot 2"]
+        # Placeholder options until the real slot names have been read from the device
+        default_options = list(DEFAULT_DIRAC_SLOTS.values())
         super().__init__(
             f"select.{device_config.identifier}.dirac_slot",
             f"{device_config.name} Dirac Slot",
@@ -123,11 +101,12 @@ class Apr16DiracSlotSelect(SelectEntity):
             return
             
         try:
-            # Fetch current active slot index
-            raw_slot = await self._device.async_get_dirac_active_slot()
-            
-            # Retrieve cached dynamic slot names map from the device instance
-            slot_names_map = getattr(self._device, "_dirac_slot_names_map", {0: "Slot 0 (Default/Bypass)", 1: "Slot 1", 2: "Slot 2"})
+            raw_slot = self._device.dirac_slot
+            if raw_slot is None:  # not read from the device yet
+                self.update({Attributes.STATE: States.UNKNOWN})
+                return
+
+            slot_names_map = self._device.dirac_slot_names
             
             # Build the options list dynamically from the map values
             dynamic_options = list(slot_names_map.values())
@@ -148,8 +127,7 @@ class Apr16DiracSlotSelect(SelectEntity):
         """Handle command callbacks for the Dirac slot selector."""
         params = params or {}
         
-        # Get current dynamic options from attributes or fallback
-        slot_names_map = getattr(self._device, "_dirac_slot_names_map", {0: "Slot 0 (Default/Bypass)", 1: "Slot 1", 2: "Slot 2"})
+        slot_names_map = self._device.dirac_slot_names
         options = list(slot_names_map.values())
         
         current_option = self.attributes.get(Attributes.CURRENT_OPTION) or options[0]

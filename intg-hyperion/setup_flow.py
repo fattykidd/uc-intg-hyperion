@@ -8,7 +8,9 @@ import logging
 from typing import Any
 import aiohttp
 
+from client import HyperionClient
 from config import APR16Config
+from const import DEFAULT_PORT, VOLUME_MODE_ABSOLUTE, VOLUME_MODE_RELATIVE
 from ucapi import RequestUserInput
 from ucapi_framework import BaseSetupFlow
 
@@ -33,6 +35,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         name: str,
         address: str,
         port: str,
+        volume_mode: str = VOLUME_MODE_ABSOLUTE,
         error: str | None = None,
     ) -> RequestUserInput:
         """Build the input form, optionally displaying an inline error message."""
@@ -63,6 +66,19 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     "label": {"en": "Port"},
                     "field": {"text": {"value": port}},
                 },
+                {
+                    "id": "volume_mode",
+                    "label": {"en": "Volume Control Style"},
+                    "field": {
+                        "dropdown": {
+                            "value": volume_mode,
+                            "items": [
+                                {"id": VOLUME_MODE_ABSOLUTE, "label": {"en": "Absolute (Percentage 0-100)"}},
+                                {"id": VOLUME_MODE_RELATIVE, "label": {"en": "Relative (Exact Decibels dB)"}},
+                            ],
+                        }
+                    },
+                },
             ]
         )
         return RequestUserInput({"en": "AudioControl Hyperion APR-16 Setup"}, settings)
@@ -71,8 +87,13 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         """Define manual entry fields, prefilled with saved values on update."""
         existing = self._existing_config()
         if existing:
-            return self._build_form(existing.name, existing.address, str(existing.port))
-        return self._build_form(DEFAULT_NAME, "", "8080")
+            return self._build_form(
+                existing.name,
+                existing.address,
+                str(existing.port),
+                existing.volume_mode,
+            )
+        return self._build_form(DEFAULT_NAME, "", str(DEFAULT_PORT), VOLUME_MODE_ABSOLUTE)
 
     async def query_device(
         self, input_values: dict[str, Any]
@@ -84,15 +105,16 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         
         name = (input_values.get("name") or "").strip()
         address = (input_values.get("address") or "").strip()
-        raw_port = (input_values.get("port") or "8080").strip()
+        raw_port = (input_values.get("port") or str(DEFAULT_PORT)).strip()
+        volume_mode = input_values.get("volume_mode", VOLUME_MODE_ABSOLUTE)
 
         if not address:
-            return self._build_form(name, address, raw_port, "IP address or hostname is required.")
+            return self._build_form(name, address, raw_port, volume_mode, "IP address or hostname is required.")
 
         try:
             port = int(raw_port)
         except ValueError:
-            return self._build_form(name, address, raw_port, f"Invalid port provided: {raw_port}")
+            return self._build_form(name, address, raw_port, volume_mode, f"Invalid port provided: {raw_port}")
 
         if not name:
             name = f"Hyperion APR-16 ({address})"
@@ -102,22 +124,16 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
             address,
             port,
         )
-        base_url = f"http://{address}:{port}"
 
+        client = HyperionClient(address, port)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{base_url}/v1/status",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
+            data = await client.get_json("/v1/status")
 
-                    existing = self._existing_config()
-                    identifier = existing.identifier if existing else data.get(
-                        "serial",
-                        data.get("mac", address.replace(".", "_").replace(":", "_")),
-                    )
+            existing = self._existing_config()
+            identifier = existing.identifier if existing else data.get(
+                "serial",
+                data.get("mac", address.replace(".", "_").replace(":", "_")),
+            )
 
             _LOG.info("Successfully connected to Hyperion APR-16 at %s:%s", address, port)
             return APR16Config(
@@ -125,6 +141,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name=name,
                 address=address,
                 port=port,
+                volume_mode=volume_mode,
             )
 
         except (aiohttp.ClientConnectionError, ConnectionError) as ex:
@@ -133,6 +150,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 "Connection refused. Check that the device is powered on and reachable.",
             )
         except TimeoutError as ex:
@@ -141,6 +159,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 "Connection timed out. Please check the IP address and port.",
             )
         except Exception as ex:
@@ -149,5 +168,8 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 f"Connection failed: {ex}",
             )
+        finally:
+            await client.close()
