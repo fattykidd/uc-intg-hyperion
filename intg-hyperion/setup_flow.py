@@ -69,7 +69,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     "id": "volume_mode",
                     "label": {"en": "Volume Control Style"},
                     "field": {
-                        "select": {
+                        "dropdown": {
                             "value": volume_mode,
                             "options": [
                                 {"id": "absolute", "name": {"en": "Absolute (Percentage 0-100)"}},
