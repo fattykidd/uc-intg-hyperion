@@ -40,16 +40,14 @@ class Apr16AbsoluteVolumeSensor(SensorEntity):
         self._device_config = device_config
         self.subscribe_to_device(device)
 
-    async def sync_state(self) -> None:
+    async def sync_state(self) -> None:   # Apr16AbsoluteVolumeSensor
         if not self._device.is_connected:
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
         try:
-            vol = await self._device.get_volume()
-            vol_str = f"{vol:.1f}" if isinstance(vol, (int, float)) else str(vol)
             self.update({
                 Attributes.STATE: States.ON,
-                Attributes.VALUE: vol_str,
+                Attributes.VALUE: f"{self._device.volume_pct:.1f}",
             })
         except Exception as err:
             _LOG.debug("[%s] Failed to update absolute volume sensor: %s", self.identifier, err)
@@ -74,21 +72,20 @@ class Apr16RelativeVolumeSensor(SensorEntity):
         self._device_config = device_config
         self.subscribe_to_device(device)
 
-    async def sync_state(self) -> None:
+    async def sync_state(self) -> None:   # Apr16RelativeVolumeSensor
         if not self._device.is_connected:
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
         try:
-            vol_pct = await self._device.get_volume()
-            # Convert absolute percentage to relative dB using our device helper
-            db_val = self._device.percentage_to_db(float(vol_pct)) if hasattr(self._device, "percentage_to_db") else float(vol_pct)
+            db_val = self._device.percentage_to_db(self._device.volume_pct)
             self.update({
                 Attributes.STATE: States.ON,
                 Attributes.VALUE: f"{db_val:.1f}",
             })
         except Exception as err:
             _LOG.debug("[%s] Failed to update relative volume sensor: %s", self.identifier, err)
-            
+
+
 class Apr16AudioFormatSensor(SensorEntity):
     """Sensor entity for displaying the active audio codec and format."""
 

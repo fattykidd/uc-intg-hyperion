@@ -13,6 +13,7 @@ import logging
 import re
 from typing import Any
 from urllib.parse import urlparse
+from xxlimited import new
 
 import aiohttp
 from aiohttp import ClientError
@@ -85,6 +86,12 @@ class Apr16(StatelessHTTPDevice):
 
         # Store the base URL for direct HTTP communication
         self._base_url = f"http://{device_config.address}:{device_config.port}"
+
+        self._volume_pct: int = 0
+        self._vol_lock = asyncio.Lock()
+        self._session: aiohttp.ClientSession | None = None
+        self._volume_mode: str = "relative"
+        
 
         # Cache for custom input names fetched from the device
         self._input_names_map: dict[int, str] = {}
@@ -275,11 +282,14 @@ class Apr16(StatelessHTTPDevice):
                     if is_on
                     else media_player.States.OFF
                 )
-                attrs.VOLUME = current_vol
                 attrs.MUTED = current_mute
                 attrs.SOURCE = current_source
                 attrs.SOUND_MODE = current_mode
 
+            if not self._vol_lock.locked():
+                self._volume_pct = current_vol
+                self._publish_volume()
+                
             _LOG.debug(
                 "[%s] Connection verified. State: %s, Vol: %s, Mute: %s",
                 self.log_id,
@@ -485,86 +495,90 @@ class Apr16(StatelessHTTPDevice):
                 
         return float(closest_p)
     
-    async def get_volume(self) -> float:
-        """Get master volume level via GET /v1/vol."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self._base_url}/v1/vol") as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                return float(data.get("level", 0.0))
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Create the HTTP session on first use and reuse it afterwards."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=3)
+            )
+        return self._session
+
+    async def close_session(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+    @property
+    def volume_pct(self) -> int:
+        """Cached volume percent (0-100). The sensors read this."""
+        return self._volume_pct
+
+    async def get_volume(self) -> int:
+        """Ask the device for its volume as an integer percent."""
+        session = await self._get_session()
+        async with session.get(f"{self._base_url}/v1/vol") as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return int(data.get("level", 0))
+
+    def _publish_volume(self) -> None:
+        pct = self._volume_pct
+        db = self.percentage_to_db(pct)
+        attrs = self._media_player_attributes.get(self.identifier)
+        if attrs:
+            attrs.VOLUME = int(round(db)) if self._volume_mode == "relative" else pct
+        self.push_update()   # the sensors refresh from this
+
+    async def set_volume_pct(self, pct: int) -> None:
+        """Optimistically set volume. Only ever sends an int 0-100."""
+        pct = max(0, min(100, int(round(pct))))
+        if pct == self._volume_pct:
+            return
+
+        self._volume_pct = pct
+        self._publish_volume()          # the OSD updates immediately
+
+        failed = False
+        try:
+            async with self._vol_lock:  # presses are sent in order
+                session = await self._get_session()
+                async with session.post(
+                    f"{self._base_url}/v1/vol", json={"level": pct}
+                ) as resp:
+                    resp.raise_for_status()
+        except Exception:
+            _LOG.exception("[%s] Volume POST failed", self.log_id)
+            failed = True
+
+        # Runs after the lock is released. Skipped if more presses are
+        # still queued, since the last one in a burst will resync.
+        if failed and not self._vol_lock.locked():
+            await self.resync_volume()
+
+    async def step_volume(self, direction: int) -> None:
+        cur = self._volume_pct
+        if self._volume_mode == "relative":
+            target_db = self.percentage_to_db(cur) + direction * 1.0
+            new = int(round(self.db_to_percent(target_db)))
+            if new == cur:              # lookup table or rounding gave no movement
+                new = cur + direction
+        else:
+            new = cur + direction
+        await self.set_volume_pct(new)
+
+    async def resync_volume(self) -> None:
+        """Replace the cached value with what the device reports."""
+        if self._vol_lock.locked():
+            return                      # a command is in flight, don't overwrite it
+        try:
+            self._volume_pct = await self.get_volume()
+        except Exception:
+            _LOG.debug("[%s] Volume resync failed", self.log_id)
+            return                      # keep the current cached value
+        self._publish_volume()
 
     async def set_volume(self, volume: float) -> None:
-        """Set master volume level via POST /v1/vol (Optimistic)."""
-        _LOG.debug("[%s] Setting master volume to: %s", self.log_id, volume)
-        
-        # 1. Optimistically update local cache and push to UI immediately
-        if self.identifier in self._media_player_attributes:
-            self._media_player_attributes[self.identifier].VOLUME = int(round(volume))
-        self.push_update()
-
-        # 2. Fire network request asynchronously
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self._base_url}/v1/vol", json={"level": volume}
-            ) as resp:
-                resp.raise_for_status()
-
-    async def change_volume(self, delta: float) -> None:
-        """Optimistically step volume up or down based on volume mode."""
-        volume_mode = getattr(self, "_volume_mode", "relative")
-        is_absolute = volume_mode in ("absolute", "pct", "Abs")
-        attrs = self._media_player_attributes.get(self.identifier)
-
-        if is_absolute:
-            # Absolute percentage mode (0-100%, integer values only)
-            current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 30.0
-            step = 1.0 if delta > 0 else -1.0
-            new_vol = max(0.0, min(100.0, current_vol + step))
-            rounded_vol = int(round(new_vol))
-
-            if attrs:
-                attrs.VOLUME = rounded_vol
-            self.push_update()
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self._base_url}/v1/vol", json={"level": rounded_vol}
-                ) as resp:
-                    resp.raise_for_status()
-        else:
-            # Relative decibel mode: query device, convert to dB, step by +/- 1.0 dB
-            try:
-                vol_pct = await self._device.get_volume()
-                current_db = (
-                    self._device.percentage_to_db(float(vol_pct))
-                    if hasattr(self._device, "percentage_to_db")
-                    else float(vol_pct)
-                )
-            except Exception:
-                current_db = -40.0
-
-            # Force exact +/- 1.0 dB step from the true device reading
-            step = 1.0 if delta > 0 else -1.0
-            new_db = round(current_db + step, 1)
-
-            # Convert back to percentage/device level if your API expects level format, 
-            # or send new_db directly if your device endpoint handles dB steps.
-            # (Assuming self._device has a db_to_percentage helper, or fallback to sending level)
-            target_level = (
-                self._device.db_to_percentage(new_db)
-                if hasattr(self._device, "db_to_percentage")
-                else new_db
-            )
-
-            if attrs:
-                attrs.VOLUME_DB = new_db
-            self.push_update()
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self._base_url}/v1/vol", json={"level": target_level}
-                ) as resp:
-                    resp.raise_for_status()
+        """Legacy entry point. Takes percent only."""
+        await self.set_volume_pct(int(round(volume)))
 
     async def get_mute(self) -> bool:
         """Get master mute status via GET /v1/mute."""
