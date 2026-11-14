@@ -25,6 +25,9 @@ services:
      command: python3 -u intg-hyperion/driver.py
      volumes:
        - ../:/app
+     network_mode: host
+     environment:
+      - PYTHONUNBUFFERED=1
 
 volumes:
   simulator-data:
