@@ -511,52 +511,58 @@ class Apr16(StatelessHTTPDevice):
 
     async def change_volume(self, delta: float) -> None:
         """Optimistically step volume up or down based on volume mode."""
-        # Force default to relative if not explicitly set to absolute
         volume_mode = getattr(self, "_volume_mode", "relative")
         is_absolute = volume_mode in ("absolute", "pct", "Abs")
         attrs = self._media_player_attributes.get(self.identifier)
 
         if is_absolute:
-            # Absolute percentage mode (0-100%)
+            # Absolute percentage mode (0-100%, integer values only)
             current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 30.0
-            new_vol = max(0.0, min(100.0, current_vol + delta))
+            step = 1.0 if delta > 0 else -1.0
+            new_vol = max(0.0, min(100.0, current_vol + step))
+            rounded_vol = int(round(new_vol))
 
             if attrs:
-                attrs.VOLUME = int(round(new_vol))
+                attrs.VOLUME = rounded_vol
             self.push_update()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self._base_url}/v1/vol", json={"level": new_vol}
+                    f"{self._base_url}/v1/vol", json={"level": rounded_vol}
                 ) as resp:
                     resp.raise_for_status()
         else:
-            # Relative decibel mode: pull from the conversion scale / relative volume sensor
-            current_db = -40.0
-            
-            # Look up the relative volume sensor or attribute from your entity state dict
-            rel_sensor_key = f"sensor.{self.identifier}.volume_relative"
-            rel_sensor = self._sensor_attributes.get(rel_sensor_key) if hasattr(self, "_sensor_attributes") else None
-            
-            if rel_sensor and getattr(rel_sensor, "value", None) is not None:
-                try:
-                    current_db = float(rel_sensor.value)
-                except (ValueError, TypeError):
-                    pass
-            elif attrs and hasattr(attrs, "volume_relative"):
-                try:
-                    current_db = float(attrs.volume_relative)
-                except (ValueError, TypeError):
-                    pass
+            # Relative decibel mode: query device, convert to dB, step by +/- 1.0 dB
+            try:
+                vol_pct = await self._device.get_volume()
+                current_db = (
+                    self._device.percentage_to_db(float(vol_pct))
+                    if hasattr(self._device, "percentage_to_db")
+                    else float(vol_pct)
+                )
+            except Exception:
+                current_db = -40.0
 
-            # Force exact +/- 1.0 dB step from the true converted scale
+            # Force exact +/- 1.0 dB step from the true device reading
             step = 1.0 if delta > 0 else -1.0
             new_db = round(current_db + step, 1)
-            self._current_db = new_db
+
+            # Convert back to percentage/device level if your API expects level format, 
+            # or send new_db directly if your device endpoint handles dB steps.
+            # (Assuming self._device has a db_to_percentage helper, or fallback to sending level)
+            target_level = (
+                self._device.db_to_percentage(new_db)
+                if hasattr(self._device, "db_to_percentage")
+                else new_db
+            )
+
+            if attrs:
+                attrs.VOLUME_DB = new_db
+            self.push_update()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self._base_url}/v1/vol", json={"level": new_db}
+                    f"{self._base_url}/v1/vol", json={"level": target_level}
                 ) as resp:
                     resp.raise_for_status()
 
