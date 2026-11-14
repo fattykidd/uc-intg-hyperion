@@ -510,22 +510,40 @@ class Apr16(StatelessHTTPDevice):
                 resp.raise_for_status()
 
     async def change_volume(self, delta: float) -> None:
-        """Optimistically step volume up or down using local cache."""
+        """Optimistically step volume up or down based on volume mode."""
+        volume_mode = getattr(self, "_volume_mode", "relative")
         attrs = self._media_player_attributes.get(self.identifier)
-        current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 0.0
-        new_vol = max(0.0, min(100.0, current_vol + delta))
 
-        # Optimistically update and push immediately
-        if attrs:
-            attrs.VOLUME = int(round(new_vol))
-        self.push_update()
+        if volume_mode == "absolute":
+            # Absolute percentage mode (0-100%)
+            current_vol = float(attrs.VOLUME) if attrs and attrs.VOLUME is not None else 30.0
+            new_vol = max(0.0, min(100.0, current_vol + delta))
 
-        # Send command to hardware
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self._base_url}/v1/vol", json={"level": new_vol}
-            ) as resp:
-                resp.raise_for_status()
+            if attrs:
+                attrs.VOLUME = int(round(new_vol))
+            self.push_update()
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._base_url}/v1/vol", json={"level": new_vol}
+                ) as resp:
+                    resp.raise_for_status()
+        else:
+            # Relative decibel mode (Exact dB integer steps)
+            current_db = getattr(self, "_current_db", -40.0)
+            if attrs and hasattr(attrs, "VOLUME_DB"):
+                current_db = float(attrs.VOLUME_DB)
+
+            # Force clean integer step (+1.0 or -1.0 dB)
+            step = 1.0 if delta > 0 else -1.0
+            new_db = round(current_db + step, 1)
+            self._current_db = new_db
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._base_url}/v1/vol", json={"level": new_db}
+                ) as resp:
+                    resp.raise_for_status()
 
     async def get_mute(self) -> bool:
         """Get master mute status via GET /v1/mute."""
