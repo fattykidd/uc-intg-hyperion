@@ -31,6 +31,8 @@ class Apr16MediaPlayer(MediaPlayerEntity):
     def __init__(self, device_config, device: Apr16):
         self._device = device
         self._device_config = device_config
+        # Read the user's volume mode choice, defaulting to absolute if not set
+        self._volume_mode = device_config.get("volume_mode", "absolute")
 
         # Pull dynamic input names if available, falling back to empty list or defaults
         initial_sources = list(device._input_names_map.values()) if hasattr(device, "_input_names_map") and device._input_names_map else [
@@ -99,15 +101,33 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                 return StatusCodes.BAD_REQUEST
 
             if cmd_id == Commands.VOLUME_UP:
-                current_vol = await self._device.get_volume()
-                new_vol = max(0.0, min(100.0, (current_vol or 0.0) + 1.0))
-                await self._device.set_volume(int(round(new_vol)))
+                if self._volume_mode == "relative":
+                    # Direct 1 dB step for relative mode
+                    current_db = await self._device.get_volume()
+                    new_db = (current_db or -45.0) + 1.0
+                    await self._device.set_volume(new_db)
+                else:
+                    # Fine 1% step for absolute percentage mode
+                    current_db = await self._device.get_volume()
+                    current_pct = self._device.db_to_percent(current_db or -45.0)
+                    new_pct = min(100.0, current_pct + 1.0)
+                    new_db = self._device.percentage_to_db(new_pct)
+                    await self._device.set_volume(new_db)
                 return StatusCodes.OK
 
             if cmd_id == Commands.VOLUME_DOWN:
-                current_vol = await self._device.get_volume()
-                new_vol = max(0.0, min(100.0, (current_vol or 0.0) - 1.0))
-                await self._device.set_volume(int(round(new_vol)))
+                if self._volume_mode == "relative":
+                    # Direct -1 dB step for relative mode
+                    current_db = await self._device.get_volume()
+                    new_db = (current_db or -45.0) - 1.0
+                    await self._device.set_volume(new_db)
+                else:
+                    # Fine -1% step for absolute percentage mode
+                    current_db = await self._device.get_volume()
+                    current_pct = self._device.db_to_percent(current_db or -45.0)
+                    new_pct = max(0.0, current_pct - 1.0)
+                    new_db = self._device.percentage_to_db(new_pct)
+                    await self._device.set_volume(new_db)
                 return StatusCodes.OK
 
             if cmd_id == Commands.MUTE_TOGGLE:

@@ -15,6 +15,7 @@ from ucapi_framework import BaseSetupFlow
 _LOG = logging.getLogger(__name__)
 
 DEFAULT_NAME = "AudioControl Hyperion APR-16"
+DEFAULT_VOLUME_MODE = "absolute"
 
 
 class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
@@ -33,6 +34,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         name: str,
         address: str,
         port: str,
+        volume_mode: str = DEFAULT_VOLUME_MODE,
         error: str | None = None,
     ) -> RequestUserInput:
         """Build the input form, optionally displaying an inline error message."""
@@ -63,6 +65,19 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                     "label": {"en": "Port"},
                     "field": {"text": {"value": port}},
                 },
+                {
+                    "id": "volume_mode",
+                    "label": {"en": "Volume Control Style"},
+                    "field": {
+                        "select": {
+                            "value": volume_mode,
+                            "options": [
+                                {"id": "absolute", "name": {"en": "Absolute (Percentage 0-100)"}},
+                                {"id": "relative", "name": {"en": "Relative (Exact Decibels dB)"}},
+                            ],
+                        }
+                    },
+                },
             ]
         )
         return RequestUserInput({"en": "AudioControl Hyperion APR-16 Setup"}, settings)
@@ -71,8 +86,13 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         """Define manual entry fields, prefilled with saved values on update."""
         existing = self._existing_config()
         if existing:
-            return self._build_form(existing.name, existing.address, str(existing.port))
-        return self._build_form(DEFAULT_NAME, "", "8080")
+            return self._build_form(
+                existing.name,
+                existing.address,
+                str(existing.port),
+                getattr(existing, "volume_mode", DEFAULT_VOLUME_MODE),
+            )
+        return self._build_form(DEFAULT_NAME, "", "8080", DEFAULT_VOLUME_MODE)
 
     async def query_device(
         self, input_values: dict[str, Any]
@@ -85,14 +105,15 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
         name = (input_values.get("name") or "").strip()
         address = (input_values.get("address") or "").strip()
         raw_port = (input_values.get("port") or "8080").strip()
+        volume_mode = input_values.get("volume_mode", DEFAULT_VOLUME_MODE)
 
         if not address:
-            return self._build_form(name, address, raw_port, "IP address or hostname is required.")
+            return self._build_form(name, address, raw_port, volume_mode, "IP address or hostname is required.")
 
         try:
             port = int(raw_port)
         except ValueError:
-            return self._build_form(name, address, raw_port, f"Invalid port provided: {raw_port}")
+            return self._build_form(name, address, raw_port, volume_mode, f"Invalid port provided: {raw_port}")
 
         if not name:
             name = f"Hyperion APR-16 ({address})"
@@ -125,6 +146,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name=name,
                 address=address,
                 port=port,
+                volume_mode=volume_mode,
             )
 
         except (aiohttp.ClientConnectionError, ConnectionError) as ex:
@@ -133,6 +155,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 "Connection refused. Check that the device is powered on and reachable.",
             )
         except TimeoutError as ex:
@@ -141,6 +164,7 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 "Connection timed out. Please check the IP address and port.",
             )
         except Exception as ex:
@@ -149,5 +173,6 @@ class HyperionSetupFlow(BaseSetupFlow[APR16Config]):
                 name,
                 address,
                 raw_port,
+                volume_mode,
                 f"Connection failed: {ex}",
             )

@@ -527,10 +527,6 @@ class Apr16(StatelessHTTPDevice):
             ) as resp:
                 resp.raise_for_status()
 
-        if self.identifier in self._media_player_attributes:
-            self._media_player_attributes[self.identifier].VOLUME = int(round(volume))  # <-- Cast to int
-        self.push_update()
-
     async def get_mute(self) -> bool:
         """Get master mute status via GET /v1/mute."""
         async with aiohttp.ClientSession() as session:
