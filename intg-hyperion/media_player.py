@@ -32,7 +32,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
         self._device = device
         self._device_config = device_config
         # Read the user's volume mode choice, defaulting to absolute if not set
-        self._volume_mode = device_config.get("volume_mode", "absolute")
+        self._volume_mode = getattr(device_config, "volume_mode", "absolute")
 
         # Pull dynamic input names if available, falling back to empty list or defaults
         initial_sources = list(device._input_names_map.values()) if hasattr(device, "_input_names_map") and device._input_names_map else [
