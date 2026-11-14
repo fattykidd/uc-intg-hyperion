@@ -245,7 +245,9 @@ class Apr16DiracSlotSensor(Apr16Sensor):
     device_class = None
 
     async def read(self) -> str:
-        slot = await self._device.async_get_dirac_active_slot()
+        slot = self._device.dirac_slot
+        if slot is None:
+            return "Unknown"
         return self._device.dirac_slot_names.get(slot, f"Slot {slot}")
 
 

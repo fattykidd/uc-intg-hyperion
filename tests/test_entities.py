@@ -158,6 +158,7 @@ async def rig_with_named_slots(monkeypatch):
 async def test_the_active_dirac_slot_sensor_names_the_right_slot(monkeypatch, slot_reply, name):
     rig = await rig_with_named_slots(monkeypatch)
     rig.apr.atlas_replies["GetDiracActiveSlot"] = slot_reply
+    await rig.device.refresh_state()
 
     await rig.entity("sensor", "dirac_active_slot").sync_state()
     await rig.entity("select", "dirac_slot").sync_state()
@@ -174,6 +175,17 @@ async def test_choosing_a_dirac_slot_by_name_selects_that_slot(monkeypatch, name
     assert await rig.command(rig.entity("select", "dirac_slot"), "select_option", {"option": name}) == StatusCodes.OK
 
     assert rig.apr.rpcs[-1] == ("SetDiracFilterSlot", bytes.fromhex(payload))
+
+
+async def test_choosing_a_dirac_slot_updates_the_sensor_at_once(monkeypatch):
+    rig = await rig_with_named_slots(monkeypatch)
+    assert rig.remote.last("sensor.dev1.dirac_active_slot", "value") in ("Slot 0", "4dB current")
+
+    assert await rig.command(rig.entity("select", "dirac_slot"), "select_option", {"option": "2dB current"}) == StatusCodes.OK
+    await settle()
+
+    assert rig.apr.state["slot"] == 1
+    assert rig.remote.last("sensor.dev1.dirac_active_slot", "value") == "2dB current"
 
 
 async def test_the_dirac_switch_and_sensor_show_the_devices_filtering_state(monkeypatch):

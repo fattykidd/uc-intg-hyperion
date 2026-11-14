@@ -57,6 +57,7 @@ class FakeApr16:
             "bit": 24,
             "sample": 48000,
             "dirac": False,  # master Dirac filtering
+            "slot": 0,  # active Dirac slot
         }
         self.input_names = {1: "Apple TV", 3: "PS5"}
 
@@ -102,6 +103,10 @@ class FakeApr16:
             # Like the real device: filtering is the first field of the reply, and zero values are left out.
             if name == "GetDiracFiltering":
                 return 200, (bytes.fromhex("080110011801") if self.state["dirac"] else b"")
+            if name == "GetDiracActiveSlot":
+                return 200, (bytes([0x08, self.state["slot"]]) if self.state["slot"] else b"")
+            if name == "SetDiracFilterSlot":
+                self.state["slot"] = body[1] if body[:1] == b"\x08" else 0
             if name == "SetDiracFiltering":
                 self.state["dirac"] = body[:2] == b"\x08\x01"
             return 200, b""

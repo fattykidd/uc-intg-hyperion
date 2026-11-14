@@ -257,12 +257,23 @@ async def test_an_unusable_dirac_reply_keeps_the_existing_names(monkeypatch, rep
     assert 0 in before
 
 
-@pytest.mark.parametrize(("reply", "slot"), [((200, b"\x08\x02"), 2), ((200, b""), 0), ((500, b""), 0)])
+@pytest.mark.parametrize(("reply", "slot"), [((200, b"\x08\x02"), 2), ((200, b"\x08\x01"), 1), ((200, b""), 0)])
 async def test_the_active_dirac_slot_is_read(monkeypatch, reply, slot):
     rig = await make_rig(monkeypatch)
     rig.apr.atlas_replies["GetDiracActiveSlot"] = reply
 
     assert await rig.device.async_get_dirac_active_slot() == slot
+
+
+async def test_an_unreadable_active_slot_is_an_error_not_slot_0(monkeypatch):
+    rig = await make_rig(monkeypatch, slot=2)
+    rig.apr.atlas_replies["GetDiracActiveSlot"] = (500, b"")
+
+    with pytest.raises(RuntimeError):
+        await rig.device.async_get_dirac_active_slot()
+
+    await rig.device.refresh_state()  # a failed read must not reset what we know
+    assert rig.device.dirac_slot == 2
 
 
 @pytest.mark.parametrize(("slot", "payload"), [(0, "1001"), (1, "08011001"), (2, "08021001"), (7, "1001")])
@@ -365,6 +376,16 @@ async def test_dirac_filtering_changed_in_the_web_ui_reaches_the_remote(monkeypa
 
     await wait_until(lambda: rig.remote.last("switch.dev1.dirac_filtering", "state") == "ON")
     await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_filtering", "value") == "On")
+
+
+async def test_a_dirac_slot_changed_in_the_web_ui_reaches_the_remote(monkeypatch, fast_polling):
+    rig = await make_rig(monkeypatch, slot=0)
+    rig.device._dirac_slot_names_map = {0: "4dB current", 1: "2dB current", 2: "6dB current"}
+
+    rig.apr.state["slot"] = 1
+
+    await wait_until(lambda: rig.remote.last("sensor.dev1.dirac_active_slot", "value") == "2dB current")
+    await wait_until(lambda: rig.remote.last("select.dev1.dirac_slot", "current_option") == "2dB current")
 
 
 async def test_nothing_is_pushed_while_nothing_changes(monkeypatch, fast_polling):

@@ -86,6 +86,7 @@ class Apr16(StatelessHTTPDevice):
         self._vol_changes = 0  # counts local volume changes, so a stale poll result can be discarded
 
         self._dirac_filtering: bool | None = None  # None until the device has been read
+        self._dirac_slot: int | None = None
 
         self._poll_task: asyncio.Task | None = None
 
@@ -152,6 +153,11 @@ class Apr16(StatelessHTTPDevice):
     def dirac_slot_names(self) -> dict[int, str]:
         """Return Dirac slot index -> name. Placeholder names until the device has been read."""
         return self._dirac_slot_names_map
+
+    @property
+    def dirac_slot(self) -> int | None:
+        """The active Dirac slot (0-2), or None if it hasn't been read from the device yet."""
+        return self._dirac_slot
 
     @property
     def dirac_filtering(self) -> bool | None:
@@ -260,7 +266,7 @@ class Apr16(StatelessHTTPDevice):
         Returns True if anything the media player shows has changed. Does not notify the remote.
         """
         attrs = self._media_player_attributes[self.identifier]
-        before = (attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering)
+        before = (attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering, self._dirac_slot)
         changes_at_start = self._vol_changes
 
         is_on = await self.get_system_power() == "1"
@@ -274,8 +280,9 @@ class Apr16(StatelessHTTPDevice):
 
         try:
             self._dirac_filtering = await self.async_get_dirac_filtering()
+            self._dirac_slot = await self.async_get_dirac_active_slot()
         except Exception as err:  # Dirac is not essential: keep what we knew
-            _LOG.debug("[%s] Could not read Dirac filtering: %s", self.log_id, err)
+            _LOG.debug("[%s] Could not read Dirac state: %s", self.log_id, err)
 
         attrs.STATE = media_player.States.ON if is_on else media_player.States.OFF
         attrs.MUTED = muted
@@ -288,7 +295,8 @@ class Apr16(StatelessHTTPDevice):
             attrs.VOLUME = self._osd_volume()
 
         return before != (
-            attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering
+            attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE,
+            self._dirac_filtering, self._dirac_slot,
         )
 
     def _start_polling(self) -> None:
@@ -592,13 +600,11 @@ class Apr16(StatelessHTTPDevice):
     # =========================================================================
 
     async def async_get_dirac_active_slot(self) -> int:
-        """Ask the device which Dirac slot is active. Returns 0 if it can't be read."""
-        try:
-            status, body = await self._api.rpc(atlas.GET_ACTIVE_SLOT, timeout=2.0)
-        except Exception as err:
-            _LOG.debug("[%s] GetDiracActiveSlot failed: %s", self.log_id, err)
-            return 0
-        return atlas.parse_active_slot(body) if status == 200 else 0
+        """Ask the device which Dirac slot is active (an empty reply means slot 0). Raises if it can't be read."""
+        status, body = await self._api.rpc(atlas.GET_ACTIVE_SLOT, timeout=2.0)
+        if status != 200:
+            raise RuntimeError(f"{atlas.GET_ACTIVE_SLOT} returned HTTP {status}")
+        return atlas.parse_active_slot(body)
 
     async def async_get_dirac_filtering(self) -> bool:
         """Ask the device whether Dirac filtering is on. Raises if the device can't be read."""
@@ -629,7 +635,11 @@ class Apr16(StatelessHTTPDevice):
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch the active Dirac filter slot (0, 1 or 2). Unknown indexes select slot 0."""
         payload = atlas.SLOT_PAYLOADS.get(slot_index, atlas.SLOT_PAYLOADS[0])
-        return await self._atlas_set(atlas.SET_FILTER_SLOT, payload)
+        success = await self._atlas_set(atlas.SET_FILTER_SLOT, payload)
+        if success:
+            self._dirac_slot = slot_index if slot_index in atlas.SLOT_PAYLOADS else 0
+            self.push_update()
+        return success
 
     async def async_set_dirac_filtering(self, enabled: bool) -> bool:
         """Enable or disable master Dirac filtering."""

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Volume +1dB / -1dB buttons. The media player's own volume controls cover them.
 
 ### Fixed
+- The Dirac slot sensor and select now follow slot changes within about 5 seconds, whether made on the remote or in the device's web UI. The active slot is part of the poll, and a failed read no longer shows as slot 0.
 - Dirac slots are numbered from 0, as on the device: the first slot name belongs to slot 0. Names were shown one slot off, and choosing a slot by name selected the wrong slot.
 - The Dirac Filtering switch now shows the device's real filtering state (read with `GetDiracFiltering`) instead of assuming it from the active slot. The poll loop keeps it in step with changes made in the device's web UI.
 - The Audio Mode sensor now shows the same friendly name as the Audio Mode select (for example "DTS Neural:X" instead of "dts-nx").

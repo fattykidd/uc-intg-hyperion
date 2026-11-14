@@ -101,9 +101,11 @@ class Apr16DiracSlotSelect(SelectEntity):
             return
             
         try:
-            # Fetch current active slot index
-            raw_slot = await self._device.async_get_dirac_active_slot()
-            
+            raw_slot = self._device.dirac_slot
+            if raw_slot is None:  # not read from the device yet
+                self.update({Attributes.STATE: States.UNKNOWN})
+                return
+
             slot_names_map = self._device.dirac_slot_names
             
             # Build the options list dynamically from the map values
