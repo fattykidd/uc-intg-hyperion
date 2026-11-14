@@ -29,7 +29,7 @@ class Apr16RebootButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 await self._device.reboot()
                 return StatusCodes.OK
@@ -53,7 +53,7 @@ class Apr16HpdButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 await self._device.trigger_hpd()
                 return StatusCodes.OK
@@ -77,7 +77,7 @@ class Apr16InputBassUpButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 active_input = await self._device.get_active_input() or "HDMI 1"
                 current = await self._device.get_input_bass(active_input)
@@ -104,7 +104,7 @@ class Apr16InputBassDownButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 active_input = await self._device.get_active_input() or "HDMI 1"
                 current = await self._device.get_input_bass(active_input)
@@ -131,7 +131,7 @@ class Apr16InputTrebleUpButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 active_input = await self._device.get_active_input() or "HDMI 1"
                 current = await self._device.get_input_treble(active_input)
@@ -158,7 +158,7 @@ class Apr16InputTrebleDownButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 active_input = await self._device.get_active_input() or "HDMI 1"
                 current = await self._device.get_input_treble(active_input)
@@ -185,7 +185,7 @@ class Apr16DisplayBrightnessUpButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 current = await self._device.get_display_brightness()
                 new_val = min(100, current + 10)
@@ -211,7 +211,7 @@ class Apr16DisplayBrightnessDownButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 current = await self._device.get_display_brightness()
                 new_val = max(0, current - 10)
@@ -236,7 +236,7 @@ class Apr16VolumeUpButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 # Grab volume from local media player attributes cache to avoid an extra HTTP GET
                 attrs = self._device.get_media_player_attributes(self._device.identifier)
@@ -265,7 +265,7 @@ class Apr16VolumeDownButton(ButtonEntity):
         self.subscribe_to_device(device)
 
     async def _handle_command(self, entity: Any, cmd_id: str, params: dict[str, Any] | None) -> StatusCodes:
-        if cmd_id == Commands.PRESS:
+        if cmd_id == Commands.PUSH:
             try:
                 # Grab volume from local media player attributes cache to avoid an extra HTTP GET
                 attrs = self._device.get_media_player_attributes(self._device.identifier)
