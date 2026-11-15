@@ -298,14 +298,7 @@ class Apr16(StatelessHTTPDevice):
         except Exception as err:  # Dirac is not essential: keep what we knew
             _LOG.debug("[%s] Could not read Dirac state: %s", self.log_id, err)
 
-        try:
-            self._audio_signal = AudioSignal(
-                *await asyncio.gather(
-                    self.get_audio_format(), self.get_audio_bit_depth(), self.get_audio_sample_rate()
-                )
-            )
-        except Exception as err:  # keep what we knew
-            _LOG.debug("[%s] Could not read the audio signal: %s", self.log_id, err)
+        await self._refresh_audio_signal()
 
         attrs.STATE = media_player.States.ON if is_on else media_player.States.OFF
         attrs.MUTED = muted
@@ -322,6 +315,25 @@ class Apr16(StatelessHTTPDevice):
             self._dirac_filtering, self._dirac_slot, self._audio_signal,
         )
 
+    async def _refresh_audio_signal(self) -> None:
+        """Read codec, bit depth and sample rate. One that can't be read keeps its last value; the rest still update."""
+        known = self._audio_signal or AudioSignal("Unknown", 0, 0)
+        codec, bit_depth, sample_rate = await asyncio.gather(
+            self.get_audio_format(),
+            self.get_audio_bit_depth(),
+            self.get_audio_sample_rate(),
+            return_exceptions=True,
+        )
+        for name, value in (("format", codec), ("bit depth", bit_depth), ("sample rate", sample_rate)):
+            if isinstance(value, BaseException):
+                _LOG.debug("[%s] Could not read audio %s: %s", self.log_id, name, value)
+
+        self._audio_signal = AudioSignal(
+            codec=known.codec if isinstance(codec, BaseException) else codec,
+            bit_depth=known.bit_depth if isinstance(bit_depth, BaseException) else bit_depth,
+            sample_rate=known.sample_rate if isinstance(sample_rate, BaseException) else sample_rate,
+        )
+    
     def _start_polling(self) -> None:
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = asyncio.create_task(self._poll_loop())
@@ -391,6 +403,11 @@ class Apr16(StatelessHTTPDevice):
             return data.get("ip", data.get("hostip", ""))
         return text.strip()
 
+    async def get_temperature(self) -> float:
+        """Get the processor's internal temperature via GET /v1/temperature."""
+        data = await self._api.get_json("/v1/temperature")
+        return float(data["temperature"])
+    
     async def reboot(self) -> None:
         """Initiate a controlled system restart via POST /v1/reboot (takes ~30-45 s)."""
         _LOG.warning("[%s] Initiating system reboot...", self.log_id)
@@ -689,6 +706,11 @@ class Apr16(StatelessHTTPDevice):
         """Get video signal details (resolution, frame rate, colour space, HDR, HDCP) via GET /v1/videodetail."""
         return await self._api.get_json("/v1/videodetail")
 
+    async def get_video_format(self) -> str:
+        """Get the video resolution and frame rate (for example "3840x2160@23.98p") via GET /v1/videoformat."""
+        data = await self._api.get_json("/v1/videoformat")
+        return str(data.get("format") or "")
+    
     async def get_audio_detail(self) -> dict[str, Any]:
         """Get audio signal details (format, rate, bit depth, channels) via GET /v1/audiodetail."""
         return await self._api.get_json("/v1/audiodetail")

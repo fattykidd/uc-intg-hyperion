@@ -145,9 +145,7 @@ class Apr16AudioDetailSensor(Apr16Sensor):
 
     async def read(self) -> str:
         details = await self._device.get_audio_detail()
-        if "result" in details:  # a bare status reply rather than signal details
-            return "Active" if details["result"] == "ok" else "Unknown"
-        return details.get("summary", details.get("format", "Active"))
+        return str(details.get("detail") or "Unknown")
 
 
 class Apr16AudioBitDepthSensor(Apr16Sensor):
@@ -174,6 +172,17 @@ class Apr16AudioSampleRateSensor(Apr16Sensor):
         return format_sample_rate(signal.sample_rate) if signal else "Unknown"
 
 
+class Apr16VideoFormatSensor(Apr16Sensor):
+    """Video resolution and frame rate."""
+
+    suffix = "video_format"
+    label = "Video Format"
+    initial = "No Signal"
+
+    async def read(self) -> str:
+        return await self._device.get_video_format() or "No Signal"
+    
+
 class Apr16VideoDetailSensor(Apr16Sensor):
     """Active video resolution, frame rate and HDR format."""
 
@@ -183,10 +192,7 @@ class Apr16VideoDetailSensor(Apr16Sensor):
 
     async def read(self) -> str:
         data = await self._device.get_video_detail()
-        resolution = data.get("resolution", "Unknown")
-        framerate = data.get("framerate", "")
-        hdr = str(data.get("hdr", "SDR")).upper()
-        return f"{resolution} @ {framerate} ({hdr})" if framerate else f"{resolution} ({hdr})"
+        return str(data.get("detail") or "No Signal")
 
 
 # --- Processing -------------------------------------------------------------
@@ -282,6 +288,18 @@ class Apr16DisplayBrightnessSensor(Apr16Sensor):
 
     async def read(self) -> str:
         return str(await self._device.get_display_brightness())
+
+
+class Apr16TemperatureSensor(Apr16Sensor):
+    """The processor's internal temperature."""
+
+    suffix = "temperature"
+    label = "Temperature"
+    initial = "0.0"
+    custom_unit = "°C"
+
+    async def read(self) -> str:
+        return f"{await self._device.get_temperature():.1f}"
 
 
 class Apr16HostIpSensor(Apr16Sensor):

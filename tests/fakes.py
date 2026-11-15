@@ -167,13 +167,15 @@ class FakeApr16:
             "/v1/mute": {"state": state["mute"]},
             "/v1/audiomode": {"mode": state["mode"]},
             "/v1/audioformat": {"format": state["format"]},
-            "/v1/audiodetail": {"summary": "PCM 48k"},
+            "/v1/audiodetail": {"detail": "Dolby Atmos"},
             "/v1/bit": {"bit": state["bit"]},
             "/v1/sample": {"sample": state["sample"]},
-            "/v1/videodetail": {"resolution": "4K", "framerate": "60", "hdr": "hdr10"},
+            "/v1/videodetail": {"detail": "Chroma: 422 | Bit Depth: 8bit | Quantization: Limited | Pixel Clock: 296700kHz"},
             "/v1/displaybrightness": {"brightness": state["brightness"]},
             "/v1/hostip": {"ip": HOST},
+            "/v1/temperature": {"temperature": 74.535},
             "/api/atlas/input/active": {"source": state["source"]},
+            "/v1/videoformat": {"format": "3840x2160@23.98p"},
         }
         return (200, _json(replies[path])) if path in replies else (404, b"")
 

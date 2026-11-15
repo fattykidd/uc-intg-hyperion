@@ -23,6 +23,7 @@ EXPECTED_ENTITIES = {
     "sensor.dev1.volume_relative": "APR Relative Volume",
     "sensor.dev1.audio_format": "APR Audio Format",
     "sensor.dev1.mute": "APR Mute",
+    "sensor.dev1.temperature": "APR Temperature",
     "sensor.dev1.display_brightness": "APR Display Brightness",
     "sensor.dev1.audio_detail": "APR Audio Signal",
     "sensor.dev1.dirac_filtering": "APR Dirac Filtering Status",
@@ -43,6 +44,7 @@ EXPECTED_ENTITIES = {
     "button.dev1.treble_down": "APR Treble -1dB",
     "button.dev1.brightness_up": "APR Brightness +10%",
     "button.dev1.brightness_down": "APR Brightness -10%",
+    "sensor.dev1.video_format": "APR Video Format",
 }
 
 
@@ -65,12 +67,14 @@ SENSOR_VALUES = {
     "audio_bit_depth": "24-bit",
     "audio_sample_rate": "48 kHz",
     "audio_format": "Dolby Atmos",
-    "audio_detail": "PCM 48k",
-    "video_detail": "4K @ 60 (HDR10)",
+    "audio_detail": "Dolby Atmos",
+    "video_detail": "Chroma: 422 | Bit Depth: 8bit | Quantization: Limited | Pixel Clock: 296700kHz",
     "active_input": "HDMI 2",
     "input_bass": "11",
     "input_treble": "-3",
     "dirac_active_slot": "Slot 0",
+    "temperature": "74.5",
+    "video_format": "3840x2160@23.98p",
 }
 
 

@@ -38,6 +38,7 @@ from sensor import (
     Apr16AudioBitDepthSensor,
     Apr16AudioSampleRateSensor,
     Apr16VideoDetailSensor,
+    Apr16VideoFormatSensor,
     Apr16AbsoluteVolumeSensor,
     Apr16RelativeVolumeSensor,
     Apr16MuteSensor,
@@ -49,6 +50,7 @@ from sensor import (
     Apr16DiracSlotSensor,
     Apr16AudioModeSensor,
     Apr16ActiveInputSensor,
+    Apr16TemperatureSensor,
 )
 
 from switch import Apr16DiracFilteringSwitch
@@ -74,6 +76,7 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16AudioBitDepthSensor,
                 Apr16AudioSampleRateSensor,
                 Apr16VideoDetailSensor,
+                Apr16VideoFormatSensor,
                 Apr16AbsoluteVolumeSensor,
                 Apr16RelativeVolumeSensor,
                 Apr16MuteSensor,
@@ -84,6 +87,7 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16InputTrebleSensor,
                 Apr16AudioModeSensor,
                 Apr16ActiveInputSensor,
+                Apr16TemperatureSensor,
                 Apr16RebootButton, 
                 Apr16HpdButton,
                 Apr16InputBassUpButton,

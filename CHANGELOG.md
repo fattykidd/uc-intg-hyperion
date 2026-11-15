@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio Bit Depth, Audio Sample Rate and Dirac Filtering Status sensors (`sensor.<id>.audio_bit_depth`, `audio_sample_rate`, `dirac_filtering`).
 - The device is now polled every 5 seconds (power, volume, mute, input, audio mode), so changes made on the front panel or in the web UI show up on the remote. The remote is only updated when something changed, plus a full sensor refresh every 30 seconds. Intervals are `POLL_INTERVAL` and `FULL_REFRESH_INTERVAL` in `const.py`.
 - A pytest suite (`tests/`, run with `pip install -r test-requirements.txt && pytest`). It runs the real device, client and entities against a fake APR-16 and a fake Remote, and includes a test that talks to a real local aiohttp server.
+- Temperature sensor (\sensor.<id>.temperature`), read from `/v1/temperature`.`
 
 ### Removed
 - The Volume +1dB / -1dB buttons. The media player's own volume controls cover them.

@@ -408,6 +408,16 @@ async def test_a_failed_signal_read_keeps_the_last_known_signal(monkeypatch):
     assert rig.device.audio_signal.sample_rate == 48000
 
 
+async def test_one_unreadable_signal_value_does_not_freeze_the_others(monkeypatch):
+    rig = await make_rig(monkeypatch, format="PCM", sample=48000)
+    rig.apr.failing.add("/v1/bit")
+    rig.apr.state.update(format="Dolby TrueHD", sample=96000)
+
+    await rig.device.refresh_state()
+
+    assert rig.device.audio_signal == ("Dolby TrueHD", 24, 96000)
+    
+
 async def test_nothing_is_pushed_while_nothing_changes(monkeypatch, fast_polling):
     rig = await make_rig(monkeypatch)
     pushed = len(rig.remote.updates)
