@@ -14,7 +14,7 @@ from typing import Any
 
 import aiohttp
 
-from const import ATLAS_PORT, ATLAS_SERVICE, DEFAULT_PORT, DEFAULT_TIMEOUT
+from const import ATLAS_PORT, ATLAS_SERVICE, DEFAULT_PORT, DEFAULT_TIMEOUT, STATE_STREAM_PATH
 
 _LOG = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class HyperionClient:
     ) -> None:
         self._rest_url = f"http://{host}:{port}"
         self._atlas_url = f"http://{host}:{atlas_port}"
+        self._state_stream_url = f"ws://{host}:{atlas_port}{STATE_STREAM_PATH}"
         self._timeout = timeout
         self._session: aiohttp.ClientSession | None = None
 
@@ -151,3 +152,16 @@ class HyperionClient:
             data=data,
             headers=merged,
         )
+
+    # ------------------------------------------------------------------
+    # State streams (WebSocket)
+    # ------------------------------------------------------------------
+
+    async def open_state_stream(self) -> aiohttp.ClientWebSocketResponse:
+        """
+        Open a WebSocket to the device's state endpoint.
+
+        The caller asks for a kind of state by sending ``{"request": "<kind>"}`` and owns the connection.
+        Raises aiohttp.WSServerHandshakeError if the device has no such endpoint (older firmware).
+        """
+        return await self._ensure_session().ws_connect(self._state_stream_url)

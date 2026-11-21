@@ -2,7 +2,8 @@
 Test doubles for the integration tests.
 
 - FakeApr16:   plays the processor. It answers the REST and Atlas calls the integration makes and records
-               everything it was asked to change.
+               everything it was asked to change. Its live state streams are off unless a test turns them on
+               (like the firmware that has no /ws/state), and then ``stream()`` plays a change made on the device.
 - FakeRemote:  stands in for ucapi's IntegrationAPI. It records what entities push to the Remote.
 - make_rig():  builds a real Apr16 device plus every real entity the driver creates, wired to the two fakes.
 
@@ -15,6 +16,7 @@ import asyncio
 import inspect
 import json
 import re
+from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
@@ -74,6 +76,54 @@ class FakeApr16:
         self.stale_connections: dict[str, int] = {}  # path -> times the next request hits a dropped connection
 
         self.sessions_opened = 0
+
+        self.streams_supported = False  # whether /ws/state exists (older firmware has no such endpoint)
+        self.stream_changes: dict[str, dict[str, Any]] = {"audio": {}, "inputs": {}, "dirac": {}}
+        self.stream_requests: list[str] = []  # the kind of every stream that was asked for
+        self.open_streams: list[FakeStream] = []
+
+    # ------------------------------------------------------------------ the state streams
+
+    def stream_payload(self, kind: str) -> dict[str, Any]:
+        """The complete state the processor would stream: what its REST state says, plus any change made through stream()."""
+        state = self.state
+        payloads = {
+            "audio": {
+                "power": state["power"] == "1",
+                "volume": state["vol"],
+                "mute": state["mute"],
+                "audio_mode": state["mode"],
+                "audio_format": state["format"],
+                "bit_depth": state["bit"],
+                "sample_rate": state["sample"],
+                "timestamp": 1,
+            },
+            "inputs": {"active_audio_name": state["source"], "active_input": state["source"]},
+            "dirac": {"active_slot": state["slot"], "filtering_enabled": state["dirac"]},
+        }
+        return {**payloads[kind], **self.stream_changes[kind]}
+
+    async def open_stream(self, url: str) -> FakeStream:
+        """What ``session.ws_connect()`` does."""
+        if not self.streams_supported:
+            raise aiohttp.WSServerHandshakeError(MagicMock(), (), status=404)
+        assert url == f"ws://{HOST}:80/ws/state", url
+        stream = FakeStream(self)
+        self.open_streams.append(stream)
+        return stream
+
+    def stream(self, kind: str, **changes: Any) -> None:
+        """A change made on the processor itself: every open stream of this kind reports its new state."""
+        self.stream_changes[kind].update(changes)
+        for stream in self.open_streams:
+            if stream.kind == kind and not stream.closed:
+                stream.send_state(self.stream_payload(kind))
+
+    def drop_streams(self) -> None:
+        """The processor goes away: open streams end and new ones are refused."""
+        self.streams_supported = False
+        for stream in self.open_streams:
+            stream.end()
 
     # ------------------------------------------------------------------ helpers for the tests
 
@@ -184,6 +234,38 @@ def _json(value: Any) -> bytes:
     return json.dumps(value).encode()
 
 
+_Message = namedtuple("_Message", "type data")
+
+
+class FakeStream:
+    """The processor's end of one /ws/state connection, as the client sees it."""
+
+    def __init__(self, apr: FakeApr16) -> None:
+        self._apr = apr
+        self._messages: asyncio.Queue[_Message] = asyncio.Queue()
+        self.kind: str | None = None
+        self.closed = False
+
+    async def send_str(self, text: str) -> None:
+        """The driver asks for a kind of state; the processor answers with the current one."""
+        self.kind = json.loads(text)["request"]
+        self._apr.stream_requests.append(self.kind)
+        self.send_state(self._apr.stream_payload(self.kind))
+
+    def send_state(self, state: dict[str, Any]) -> None:
+        text = json.dumps({"request": self.kind, "state": json.dumps(state)})  # the state is JSON inside a string
+        self._messages.put_nowait(_Message(aiohttp.WSMsgType.TEXT, text))
+
+    def end(self) -> None:
+        self._messages.put_nowait(_Message(aiohttp.WSMsgType.CLOSED, None))
+
+    async def receive(self, timeout: float | None = None) -> _Message:
+        return await asyncio.wait_for(self._messages.get(), timeout)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 class _Response:
     def __init__(self, status: int, body: bytes) -> None:
         self.status = status
@@ -222,6 +304,9 @@ def install_fake_network(monkeypatch, apr: FakeApr16) -> None:
 
         def request(self, method: str, url: str, **kwargs: Any) -> _Exchange:
             return _Exchange(apr, method, url, kwargs)
+
+        async def ws_connect(self, url: str, **kwargs: Any) -> FakeStream:
+            return await apr.open_stream(url)
 
         async def close(self) -> None:
             self.closed = True
@@ -290,6 +375,13 @@ class FakeRemote:
 # =============================================================================
 
 
+async def wait_until(condition, timeout: float = 2.0) -> None:
+    """Wait for something that happens in the background (a poll, a stream message)."""
+    async with asyncio.timeout(timeout):
+        while not condition():
+            await asyncio.sleep(0.01)
+
+
 async def settle() -> None:
     """Let the event emitter run the entities' sync_state() handlers."""
     for _ in range(60):
@@ -319,16 +411,20 @@ class Rig:
         return await entity.command(cmd_id, params)
 
 
-async def make_rig(monkeypatch, *, volume_mode: str = "absolute", connect: bool = True, **device_state: Any) -> Rig:
+async def make_rig(
+    monkeypatch, *, volume_mode: str = "absolute", connect: bool = True, streams: bool = False, **device_state: Any
+) -> Rig:
     """
     Build a real device and the real entities against a fake processor and a fake Remote.
 
-    Keyword arguments other than volume_mode and connect set the processor's starting state
-    (for example ``vol=42``). With connect=True the device connects and the entities sync,
+    Keyword arguments other than volume_mode, connect and streams set the processor's starting state
+    (for example ``vol=42``). With streams=True the processor has live state streams, otherwise it behaves
+    like firmware without them and the device is polled. With connect=True the device connects and the entities sync,
     like the driver does after a successful connection.
     """
     apr = FakeApr16()
     apr.state.update(device_state)
+    apr.streams_supported = streams
     install_fake_network(monkeypatch, apr)
 
     config = APR16Config(

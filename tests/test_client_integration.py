@@ -127,3 +127,37 @@ async def test_rpc_sends_the_body_and_connect_headers_and_returns_unfavourable_s
 
     assert (status, body) == (200, b"\x08\x01")
     assert missing_status == 404
+
+
+async def test_the_state_stream_is_opened_on_the_atlas_port():
+    async def state(request: web.Request) -> web.WebSocketResponse:
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.send_str((await ws.receive_str()).upper())
+        return ws
+
+    app = web.Application()
+    app.router.add_get("/ws/state", state)
+    server = TestServer(app)
+    await server.start_server()
+    client = HyperionClient("127.0.0.1", atlas_port=server.port)
+    try:
+        ws = await client.open_state_stream()
+        await ws.send_str('{"request": "audio"}')
+
+        assert await ws.receive_str() == '{"REQUEST": "AUDIO"}'
+    finally:
+        await client.close()
+        await server.close()
+
+
+async def test_a_device_without_a_state_stream_refuses_it():
+    server = TestServer(web.Application())  # no /ws/state, like older firmware
+    await server.start_server()
+    client = HyperionClient("127.0.0.1", atlas_port=server.port)
+    try:
+        with pytest.raises(aiohttp.WSServerHandshakeError):
+            await client.open_state_stream()
+    finally:
+        await client.close()
+        await server.close()

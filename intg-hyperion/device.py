@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from asyncio import AbstractEventLoop
+from collections.abc import Callable
 from typing import Any, NamedTuple
 
 import aiohttp
@@ -37,8 +38,10 @@ from const import (
     TONE_MAX_DB,
     TONE_MIN_DB,
     VOLUME_MODE_RELATIVE,
+    VOLUME_SETTLE,
     SimpleCommands,
 )
+from stream import StateStream
 from volume import percent_to_db, step_percent
 
 _LOG = logging.getLogger(__name__)
@@ -52,6 +55,13 @@ class AudioSignal(NamedTuple):
     codec: str
     bit_depth: int
     sample_rate: int
+
+
+def _as_int(value: Any, default: int | None = None) -> int | None:
+    """A whole number from a value the device sent (a number, rounded), or default if it isn't one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return int(round(value))
 
 
 class Apr16(StatelessHTTPDevice):
@@ -92,12 +102,16 @@ class Apr16(StatelessHTTPDevice):
         self._volume_pct: int = 0
         self._vol_lock = asyncio.Lock()  # keeps volume POSTs in the order they were pressed
         self._vol_changes = 0  # counts local volume changes, so a stale poll result can be discarded
+        self._vol_settle_until = 0.0  # loop time until which the device's reports of the volume are held back
+        self._vol_reconcile: asyncio.TimerHandle | None = None
+        self._device_volume_pct: int | None = None  # the last volume the device's stream reported
 
         self._dirac_filtering: bool | None = None  # None until the device has been read
         self._dirac_slot: int | None = None
         self._audio_signal: AudioSignal | None = None
 
         self._poll_task: asyncio.Task | None = None
+        self._streams: list[StateStream] = []
 
         # Names fetched from the device after connecting.
         self._input_names_map: dict[int, str] = {}
@@ -254,11 +268,16 @@ class Apr16(StatelessHTTPDevice):
         if connected:
             self.push_update()
             self._start_polling()
+            self._start_streams()
         return connected
 
     async def disconnect(self) -> None:
         """Stop watching the device, disconnect and release the shared HTTP session."""
+        await self._stop_streams()
         await self._stop_polling()
+        if self._vol_reconcile is not None:
+            self._vol_reconcile.cancel()
+            self._vol_reconcile = None
         try:
             await super().disconnect()
         finally:
@@ -268,10 +287,11 @@ class Apr16(StatelessHTTPDevice):
     # State refresh & polling
     # =========================================================================
     #
-    # The device has no way to tell us about changes made on its front panel or web UI,
-    # so the core state is re-read every few seconds. The remote is only updated when
-    # something actually changed, plus a slower refresh for the sensors that have no
-    # cached state (signal formats, tone, brightness and so on).
+    # Changes made on the device's front panel or web UI reach us through its state streams
+    # (see "Live state streams" below). While those are down, the core state is re-read every
+    # few seconds instead. Either way the remote is only updated when something actually
+    # changed, plus a slower refresh for the sensors that have no cached state (tone,
+    # brightness and so on).
 
     async def refresh_state(self) -> bool:
         """
@@ -280,7 +300,7 @@ class Apr16(StatelessHTTPDevice):
         Returns True if anything the media player shows has changed. Does not notify the remote.
         """
         attrs = self._media_player_attributes[self.identifier]
-        before = (attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE, self._dirac_filtering, self._dirac_slot, self._audio_signal)
+        before = self._snapshot()
         changes_at_start = self._vol_changes
 
         is_on = await self.get_system_power() == "1"
@@ -296,7 +316,7 @@ class Apr16(StatelessHTTPDevice):
             attrs.SOURCE = await self.get_active_input_name()
         except Exception as err:
             _LOG.debug("[%s] Could not refresh the current source name: %s", self.log_id, err)
-        
+
         try:
             self._dirac_filtering = await self.async_get_dirac_filtering()
             self._dirac_slot = await self.async_get_dirac_active_slot()
@@ -312,10 +332,15 @@ class Apr16(StatelessHTTPDevice):
 
         # A volume change made through the remote while we were reading is newer than what we read.
         if not self._vol_lock.locked() and self._vol_changes == changes_at_start:
-            self._volume_pct = volume_pct
+            self._volume_pct = self._device_volume_pct = volume_pct
             attrs.VOLUME = self._osd_volume()
 
-        return before != (
+        return before != self._snapshot()
+
+    def _snapshot(self) -> tuple:
+        """Everything the entities show that this class keeps, to tell whether a read changed any of it."""
+        attrs = self._media_player_attributes[self.identifier]
+        return (
             attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE,
             self._dirac_filtering, self._dirac_slot, self._audio_signal,
         )
@@ -338,7 +363,7 @@ class Apr16(StatelessHTTPDevice):
             bit_depth=known.bit_depth if isinstance(bit_depth, BaseException) else bit_depth,
             sample_rate=known.sample_rate if isinstance(sample_rate, BaseException) else sample_rate,
         )
-    
+
     def _start_polling(self) -> None:
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = asyncio.create_task(self._poll_loop())
@@ -357,6 +382,8 @@ class Apr16(StatelessHTTPDevice):
 
         while True:
             await asyncio.sleep(POLL_INTERVAL)
+            if self.streams_live and loop.time() - last_full_refresh < FULL_REFRESH_INTERVAL:
+                continue  # the streams are reporting changes as they happen
             try:
                 changed = await self.refresh_state()
             except asyncio.CancelledError:
@@ -374,6 +401,124 @@ class Apr16(StatelessHTTPDevice):
             if changed or loop.time() - last_full_refresh >= FULL_REFRESH_INTERVAL:
                 last_full_refresh = loop.time()
                 self.push_update()
+
+    # =========================================================================
+    # Live state streams
+    # =========================================================================
+    #
+    # The device streams its audio (power, volume, mute, mode, signal), inputs and Dirac state
+    # over WebSockets and sends each one again whenever it changes. Each stream's complete
+    # state is applied here and the remote is told only if something we show actually changed.
+    # Polling keeps running underneath, slowly, as a safety net and for the sensors the
+    # streams don't carry (see _poll_loop).
+
+    @property
+    def streams_live(self) -> bool:
+        """True when every state stream is connected and the device is being heard from."""
+        return bool(self._streams) and all(stream.live for stream in self._streams)
+
+    def _start_streams(self) -> None:
+        if self._streams:
+            return
+        self._streams = [
+            StateStream(kind, self._api.open_state_stream, handler, log_id=self.log_id)
+            for kind, handler in (
+                ("audio", self._on_audio_state),
+                ("inputs", self._on_inputs_state),
+                ("dirac", self._on_dirac_state),
+            )
+        ]
+        for stream in self._streams:
+            stream.start()
+
+    async def _stop_streams(self) -> None:
+        streams, self._streams = self._streams, []
+        await asyncio.gather(*(stream.stop() for stream in streams))
+
+    def _apply_stream_state(self, apply: Callable[[dict[str, Any]], None], state: dict[str, Any]) -> None:
+        """Run one of the handlers below, and tell the remote if it changed anything."""
+        before = self._snapshot()
+        apply(state)
+        if self._snapshot() != before:
+            self.push_update()
+
+    def _on_audio_state(self, state: dict[str, Any]) -> None:
+        self._apply_stream_state(self._apply_audio_state, state)
+
+    def _on_inputs_state(self, state: dict[str, Any]) -> None:
+        self._apply_stream_state(self._apply_inputs_state, state)
+
+    def _on_dirac_state(self, state: dict[str, Any]) -> None:
+        self._apply_stream_state(self._apply_dirac_state, state)
+
+    def _apply_audio_state(self, state: dict[str, Any]) -> None:
+        attrs = self._media_player_attributes[self.identifier]
+
+        if isinstance(power := state.get("power"), bool):
+            attrs.STATE = media_player.States.ON if power else media_player.States.OFF
+        if isinstance(muted := state.get("mute"), bool):
+            attrs.MUTED = muted
+        if (mode := state.get("audio_mode")) and isinstance(mode, str):
+            attrs.SOUND_MODE = mode
+
+        if (pct := _as_int(state.get("volume"))) is not None:
+            self._device_volume_pct = pct
+            if not self._volume_settling():
+                self._adopt_device_volume()
+
+        known = self._audio_signal or AudioSignal("Unknown", 0, 0)
+        codec = state.get("audio_format")
+        self._audio_signal = AudioSignal(
+            codec=codec if isinstance(codec, str) and codec else known.codec,
+            bit_depth=_as_int(state.get("bit_depth"), known.bit_depth),
+            sample_rate=_as_int(state.get("sample_rate"), known.sample_rate),
+        )
+
+    def _apply_inputs_state(self, state: dict[str, Any]) -> None:
+        # The audio side decides what the remote shows as the source, as with the REST read.
+        # (Audio and video can be on different inputs; usually they are the same one.)
+        name = state.get("active_audio_name") or state.get("active_input")
+        if isinstance(name, str) and name:
+            self._media_player_attributes[self.identifier].SOURCE = self._source_display_name(name)
+
+    def _apply_dirac_state(self, state: dict[str, Any]) -> None:
+        slot = _as_int(state.get("active_slot"))
+        if slot in DEFAULT_DIRAC_SLOTS:
+            self._dirac_slot = slot
+        if isinstance(filtering := state.get("filtering_enabled"), bool):
+            self._dirac_filtering = filtering
+
+    def _volume_settling(self) -> bool:
+        """True while a volume change of ours is still working its way through the device."""
+        return self._vol_lock.locked() or asyncio.get_running_loop().time() < self._vol_settle_until
+
+    def _adopt_device_volume(self) -> None:
+        """Take the volume the device last reported as the real one. Returns nothing; the caller notifies."""
+        if self._device_volume_pct is None or self._device_volume_pct == self._volume_pct:
+            return
+        self._volume_pct = self._device_volume_pct
+        self._media_player_attributes[self.identifier].VOLUME = self._osd_volume()
+
+    def _hold_back_device_volume(self) -> None:
+        """
+        After a volume change of ours, ignore the device's reports of the volume for a moment: pressing
+        quickly makes it report every step on the way, and showing those would make the display jump back.
+        Then settle on the last thing it said, which also corrects a change it refused (the maximum volume).
+        """
+        loop = asyncio.get_running_loop()
+        self._vol_settle_until = loop.time() + VOLUME_SETTLE
+        if self._vol_reconcile is not None:
+            self._vol_reconcile.cancel()
+        self._vol_reconcile = loop.call_later(VOLUME_SETTLE, self._reconcile_volume)
+
+    def _reconcile_volume(self) -> None:
+        self._vol_reconcile = None
+        if self._volume_settling():
+            return  # another change is under way; it will reconcile when it is done
+        before = self._volume_pct
+        self._adopt_device_volume()
+        if self._volume_pct != before:
+            self.push_update()
 
     # =========================================================================
     # System & power
@@ -412,7 +557,7 @@ class Apr16(StatelessHTTPDevice):
         """Get the processor's internal temperature via GET /v1/temperature."""
         data = await self._api.get_json("/v1/temperature")
         return float(data["temperature"])
-    
+
     async def reboot(self) -> None:
         """Initiate a controlled system restart via POST /v1/reboot (takes ~30-45 s)."""
         _LOG.warning("[%s] Initiating system reboot...", self.log_id)
@@ -497,6 +642,7 @@ class Apr16(StatelessHTTPDevice):
 
         self._volume_pct = pct
         self._vol_changes += 1
+        self._hold_back_device_volume()
         self._publish_volume()
 
         failed = False
@@ -613,7 +759,10 @@ class Apr16(StatelessHTTPDevice):
 
     async def get_active_input_name(self) -> str:
         """Get the active input's friendly name, using the user's custom names where set."""
-        raw_input = await self.get_active_input()
+        return self._source_display_name(await self.get_active_input())
+
+    def _source_display_name(self, raw_input: str) -> str:
+        """Turn the device's name for an input (such as "HDMI 3") into the name in the source list."""
         if not raw_input:
             return "Unknown"
 
@@ -719,7 +868,7 @@ class Apr16(StatelessHTTPDevice):
         """Get the video resolution and frame rate (for example "3840x2160@23.98p") via GET /v1/videoformat."""
         data = await self._api.get_json("/v1/videoformat")
         return str(data.get("format") or "")
-    
+
     async def get_audio_detail(self) -> dict[str, Any]:
         """Get audio signal details (format, rate, bit depth, channels) via GET /v1/audiodetail."""
         return await self._api.get_json("/v1/audiodetail")

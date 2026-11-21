@@ -11,13 +11,23 @@ from enum import StrEnum
 DEFAULT_PORT = 8080
 ATLAS_PORT = 80  # Connect/protobuf endpoint used for Dirac Live control
 ATLAS_SERVICE = "commands.v1.AtlasService"
+STATE_STREAM_PATH = "/ws/state"  # WebSocket on the Atlas port that tells us about every change
 DEFAULT_TIMEOUT = 5.0  # seconds
 
-# Keeping the remote in step with changes made on the device itself (front panel, web UI)
+# Keeping the remote in step with changes made on the device itself (front panel, web UI).
+# Normally the device's state streams do this. Polling takes over whenever they are down.
 POLL_INTERVAL = 5.0  # seconds between checks of power, volume, mute, input and audio mode
 FULL_REFRESH_INTERVAL = 30.0  # seconds between refreshes of every sensor, even if nothing above changed
 
+# State streams (see stream.py)
+STREAM_SILENCE_TIMEOUT = 30.0  # seconds without a message (the device sends a heartbeat every ~15 s) before reconnecting
+STREAM_CONNECT_TIMEOUT = 10.0  # seconds to open a stream
+STREAM_RECONNECT_MIN = 1.0  # seconds before the first reconnect attempt, doubled after each failure
+STREAM_RECONNECT_MAX = 30.0  # longest wait between reconnect attempts
+STREAM_STABLE_AFTER = 30.0  # a connection that lasted this long is healthy: the next reconnect starts at the minimum
+
 # --- Volume -----------------------------------------------------------------
+VOLUME_SETTLE = 1.5  # seconds after a volume change we made, during which the device's own reports of it are not trusted
 VOLUME_MODE_ABSOLUTE = "absolute"  # remote shows percent (0-100)
 VOLUME_MODE_RELATIVE = "relative"  # remote shows decibels (-127.5 to 0)
 
