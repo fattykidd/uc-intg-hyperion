@@ -1,5 +1,5 @@
 """
-Select entity definitions for audio modes and dirac live filter slotson the AudioControl Hyperion APR-16.
+Select entity definitions for audio modes and dirac live filter slots on the AudioControl Hyperion APR-16.
 """
 
 from __future__ import annotations
@@ -10,10 +10,12 @@ from typing import Any
 from ucapi import StatusCodes
 from ucapi.select import Attributes, Commands, States
 from ucapi_framework import SelectEntity
+
 from const import API_TO_UI_AUDIO_MODE, AUDIO_MODE_MAPPING, DEFAULT_DIRAC_SLOTS
 from device import Apr16
 
 _LOG = logging.getLogger(__name__)
+
 
 class Apr16AudioModeSelect(SelectEntity):
     """
@@ -40,10 +42,14 @@ class Apr16AudioModeSelect(SelectEntity):
         try:
             raw_mode = await self._device.get_audio_mode()
             display_option = API_TO_UI_AUDIO_MODE.get(raw_mode, "Stereo")
-            self.update({
-                Attributes.STATE: States.ON,
-                Attributes.CURRENT_OPTION: display_option,
-            })
+            self.update(
+                {
+                    Attributes.STATE: States.ON,
+                    Attributes.OPTIONS: list(AUDIO_MODE_MAPPING.keys()),
+                    Attributes.CURRENT_OPTION: display_option,
+                },
+                force=True,
+            )
         except Exception as err:
             _LOG.debug("[%s] Failed to sync audio mode: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
@@ -54,14 +60,14 @@ class Apr16AudioModeSelect(SelectEntity):
         """Handle command callbacks from the remote UI."""
         if cmd_id != Commands.SELECT_OPTION:
             return StatusCodes.NOT_IMPLEMENTED
-        
+
         option = params.get("option") if params else None
         if not option or option not in AUDIO_MODE_MAPPING:
             return StatusCodes.BAD_REQUEST
 
         api_mode = AUDIO_MODE_MAPPING[option]
         _LOG.debug("[%s] Selecting audio mode: %s (API: %s)", self._device.log_id, option, api_mode)
-        
+
         try:
             await self._device.set_audio_mode(api_mode)
             self.update({
@@ -73,10 +79,12 @@ class Apr16AudioModeSelect(SelectEntity):
             _LOG.error("[%s] Failed to set audio mode: %s", self._device.log_id, err)
             return StatusCodes.SERVER_ERROR
 
+
 class Apr16DiracSlotSelect(SelectEntity):
     """
     Select entity for changing active Dirac Live filter slots with custom profile names.
     """
+    
     def __init__(self, device_config, device: Apr16):
         # Placeholder options until the real slot names have been read from the device
         default_options = list(DEFAULT_DIRAC_SLOTS.values())
@@ -99,24 +107,33 @@ class Apr16DiracSlotSelect(SelectEntity):
         if not self._device.is_connected:
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
-            
+
         try:
             raw_slot = self._device.dirac_slot
             if raw_slot is None:  # not read from the device yet
-                self.update({Attributes.STATE: States.UNKNOWN})
+                self.update(
+                    {
+                        Attributes.STATE: States.UNKNOWN,
+                        Attributes.OPTIONS: list(self._device.dirac_slot_names.values()),
+                    },
+                    force=True,
+                )
                 return
 
             slot_names_map = self._device.dirac_slot_names
-            
+
             # Build the options list dynamically from the map values
             dynamic_options = list(slot_names_map.values())
             display_option = slot_names_map.get(raw_slot, f"Slot {raw_slot}")
-            
-            self.update({
-                Attributes.STATE: States.ON,
-                Attributes.OPTIONS: dynamic_options,
-                Attributes.CURRENT_OPTION: display_option,
-            })
+
+            self.update(
+                {
+                    Attributes.STATE: States.ON,
+                    Attributes.OPTIONS: dynamic_options,
+                    Attributes.CURRENT_OPTION: display_option,
+                },
+                force=True,
+            )
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot select: %s", self._device.log_id, err)
             self.update({Attributes.STATE: States.UNAVAILABLE})
@@ -126,13 +143,13 @@ class Apr16DiracSlotSelect(SelectEntity):
     ) -> StatusCodes:
         """Handle command callbacks for the Dirac slot selector."""
         params = params or {}
-        
+
         slot_names_map = self._device.dirac_slot_names
         options = list(slot_names_map.values())
-        
+
         current_option = self.attributes.get(Attributes.CURRENT_OPTION) or options[0]
         target_option = current_option
-        
+
         if cmd_id == "select_option":
             target_option = params.get("option", current_option)
         elif cmd_id == "select_first":
@@ -145,7 +162,7 @@ class Apr16DiracSlotSelect(SelectEntity):
                 target_option = options[(idx + 1) % len(options)]
             except ValueError:
                 target_option = options[0]
-        elif cmd_id == "select_prev":
+        elif cmd_id == "select_previous":
             try:
                 idx = options.index(current_option)
                 target_option = options[(idx - 1) % len(options)]
@@ -154,13 +171,11 @@ class Apr16DiracSlotSelect(SelectEntity):
         else:
             return StatusCodes.NOT_IMPLEMENTED
 
-        # Reverse lookup: find the integer slot index matching the selected target option string
-        slot_idx = 0
-        for idx, name in slot_names_map.items():
-            if name == target_option:
-                slot_idx = idx
-                break
-        
+        # Reverse lookup: find the slot index matching the selected option name
+        slot_idx = next((idx for idx, name in slot_names_map.items() if name == target_option), None)
+        if slot_idx is None:
+            return StatusCodes.BAD_REQUEST
+
         _LOG.debug(
             "[%s] Executing Dirac slot selector command %s -> target option: %s (slot %d)",
             self._device.log_id,

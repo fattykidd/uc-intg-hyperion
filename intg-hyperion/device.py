@@ -286,12 +286,17 @@ class Apr16(StatelessHTTPDevice):
         is_on = await self.get_system_power() == "1"
         volume_pct = await self.get_volume()
         muted = await self.get_mute()
-        source = await self.get_active_input()
+        source = await self.get_active_input_name()  # same naming as the source list, or the Remote cannot match it
         try:
             sound_mode = await self.get_audio_mode() or "Stereo"
         except Exception:
             sound_mode = attrs.SOUND_MODE or "Stereo"
 
+        try:  # the current source was read before the names were known
+            attrs.SOURCE = await self.get_active_input_name()
+        except Exception as err:
+            _LOG.debug("[%s] Could not refresh the current source name: %s", self.log_id, err)
+        
         try:
             self._dirac_filtering = await self.async_get_dirac_filtering()
             self._dirac_slot = await self.async_get_dirac_active_slot()
@@ -585,6 +590,10 @@ class Apr16(StatelessHTTPDevice):
         attrs = self._media_player_attributes.get(self.identifier)
         if attrs:
             attrs.SOURCE_LIST = [input_names.get(i, default) for i, default in enumerate(DEFAULT_INPUTS, start=1)]
+            try:  # the current source was read before the names were known
+                attrs.SOURCE = await self.get_active_input_name()
+            except Exception as err:
+                _LOG.debug("[%s] Could not refresh the current source name: %s", self.log_id, err)
             self.push_update()
         return input_names
 

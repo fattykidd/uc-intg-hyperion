@@ -191,6 +191,40 @@ async def test_choosing_a_dirac_slot_updates_the_sensor_at_once(monkeypatch):
     assert rig.apr.state["slot"] == 1
     assert rig.remote.last("sensor.dev1.dirac_active_slot", "value") == "2dB current"
 
+async def test_an_unknown_dirac_slot_name_is_refused_and_changes_nothing(monkeypatch):
+    rig = await rig_with_named_slots(monkeypatch)
+    sent_before = len(rig.apr.rpcs)
+
+    result = await rig.command(rig.entity("select", "dirac_slot"), "select_option", {"option": "No Such Slot"})
+
+    assert result == StatusCodes.BAD_REQUEST
+    assert len(rig.apr.rpcs) == sent_before, "a command was sent to the processor"
+    assert rig.apr.state["slot"] == 0
+
+
+@pytest.mark.parametrize(
+    ("command", "payload"),
+    [
+        ("select_next", "08011001"),      # from slot 0 to slot 1
+        ("select_previous", "08021001"),  # from slot 0 wraps round to the last slot
+        ("select_first", "1001"),
+        ("select_last", "08021001"),
+    ],
+)
+async def test_stepping_through_the_dirac_slots(monkeypatch, command, payload):
+    rig = await rig_with_named_slots(monkeypatch)
+    await rig.device.refresh_state()
+    await rig.entity("select", "dirac_slot").sync_state()
+
+    assert await rig.command(rig.entity("select", "dirac_slot"), command) == StatusCodes.OK
+
+    assert rig.apr.rpcs[-1] == ("SetDiracFilterSlot", bytes.fromhex(payload))
+
+
+async def test_an_unknown_dirac_select_command_is_not_implemented(monkeypatch):
+    rig = await rig_with_named_slots(monkeypatch)
+
+    assert await rig.command(rig.entity("select", "dirac_slot"), "select_prev") == StatusCodes.NOT_IMPLEMENTED
 
 async def test_the_dirac_switch_and_sensor_show_the_devices_filtering_state(monkeypatch):
     rig = await make_rig(monkeypatch, dirac=True)

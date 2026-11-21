@@ -227,6 +227,20 @@ async def test_the_active_input_is_reported_by_its_custom_name(monkeypatch):
     assert await rig.device.get_active_input_name() == "Apple TV"
 
 
+async def test_the_media_player_source_uses_the_same_name_as_the_source_list(monkeypatch):
+    rig = await make_rig(monkeypatch, source="HDMI 1")  # input 1 is named "Apple TV" on the fake device
+
+    assert rig.remote.last("media_player.dev1", "source") == "Apple TV"
+    assert rig.remote.last("media_player.dev1", "source") in rig.remote.last("media_player.dev1", "source_list")
+
+
+async def test_an_input_changed_on_the_device_is_shown_by_its_custom_name(monkeypatch, fast_polling):
+    rig = await make_rig(monkeypatch, source="HDMI 1")
+
+    rig.apr.state["source"] = "HDMI 3"  # named "PS5" on the fake device
+
+    await wait_until(lambda: rig.remote.last("media_player.dev1", "source") == "PS5")
+
 async def test_a_non_json_host_ip_is_still_understood(monkeypatch):
     rig = await make_rig(monkeypatch)
     rig.apr.overrides["/v1/hostip"] = (200, b"10.0.0.9\n")

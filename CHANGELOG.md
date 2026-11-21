@@ -34,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `volume` command in relative mode no longer raises an error, and refuses positive dB values instead of jumping to 100%.
 - An empty Dirac slot-name reply no longer wipes the cached slot names.
 - Removed a stray `xxlimited` import and the leftover template code and TODO comments.
-
+- Current source now uses same name as source list.
+- Options list now sent every time an entity updates
 ---
 
 ## v0.1.0 - 2025-12-03

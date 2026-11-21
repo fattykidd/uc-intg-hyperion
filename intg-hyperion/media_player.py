@@ -67,7 +67,8 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                     Attributes.SOURCE: attrs.SOURCE,
                     # Custom input names can arrive after the entity was created.
                     Attributes.SOURCE_LIST: self._device.source_list,
-                }
+                },
+                force=True,
             )
 
     async def _handle_command(

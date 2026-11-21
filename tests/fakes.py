@@ -248,25 +248,41 @@ class FakeRemote:
 
     def __init__(self) -> None:
         self.updates: list[tuple[str, dict[str, Any]]] = []
+        self.entities: dict[str, Any] = {}  # the integration's own copies, as ucapi's ConfiguredEntities holds them
         self.configured_entities = self
 
     # the parts of ConfiguredEntities that framework entities use
     def contains(self, entity_id: str) -> bool:
         return True
 
-    def get(self, entity_id: str) -> None:
-        return None
+    def get(self, entity_id: str) -> Any:
+        return self.entities.get(entity_id)
 
     def update_attributes(self, entity_id: str, attributes: dict[Any, Any]) -> None:
+        """Record what is sent to the Remote and merge it into the stored copy, like the real library does."""
         self.updates.append((entity_id, {_plain(k): _plain(v) for k, v in attributes.items()}))
+        if entity := self.entities.get(entity_id):
+            entity.attributes.update(attributes)
 
     # for the tests
     def last(self, entity_id: str, attribute: str) -> Any:
-        """The most recent value pushed for an attribute of an entity, or None."""
+        """
+        The value the Remote holds for an attribute: the most recent one pushed, otherwise the entity's
+        stored value (what a full state fetch would return). None if there is neither.
+        """
         for pushed_id, attributes in reversed(self.updates):
             if pushed_id == entity_id and attribute in attributes:
                 return attributes[attribute]
-        return None
+        entity = self.entities.get(entity_id)
+        return _plain(entity.attributes.get(attribute)) if entity else None
+
+    def pushed(self, entity_id: str) -> dict[str, Any]:
+        """Everything pushed to the Remote for an entity so far, merged (a full state fetch is not included)."""
+        merged: dict[str, Any] = {}
+        for pushed_id, attributes in self.updates:
+            if pushed_id == entity_id:
+                merged.update(attributes)
+        return merged
 
 
 # =============================================================================
@@ -324,6 +340,7 @@ async def make_rig(monkeypatch, *, volume_mode: str = "absolute", connect: bool 
     entities = {entity.id: entity for entity in Apr16Driver().create_entities(config, device)}
     for entity in entities.values():
         entity._api = remote
+        remote.entities = entities
 
     rig = Rig(apr=apr, device=device, remote=remote, entities=entities, config=config)
 
