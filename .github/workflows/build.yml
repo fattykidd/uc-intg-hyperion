@@ -18,8 +18,47 @@ env:
   PYTHON_VER: 3.11.12-0.3.0
 
 jobs:
+  test:
+    name: Check and Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check that the committed version files match the release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION=${INPUT_VERSION:-${GITHUB_REF#refs/tags/v}}
+          DRIVER_VERSION=$(jq -r .version driver.json)
+          PYPROJECT_VERSION=$(grep -E '^\s*version\s*=' pyproject.toml | head -n 1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+          if [ "$DRIVER_VERSION" != "$VERSION" ] || [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+            echo "::error::Releasing $VERSION, but driver.json says $DRIVER_VERSION and pyproject.toml says $PYPROJECT_VERSION"
+            exit 1
+          fi
+          if ! grep -q "^## v${VERSION}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## v${VERSION}' section"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            test-requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r test-requirements.txt
+
+      - name: Run tests
+        run: python -m pytest
+
   build:
     name: Build Release
+    needs: [test]
     runs-on: ubuntu-24.04
     #Save version to env output variable to be able to use it in the following release job as a tag
     outputs:
