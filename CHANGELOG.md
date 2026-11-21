@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.5 - 2026-11-21
+
+### Changed
+- The driver now follows the APR-16's live state streams (the same WebSockets the device's own web UI uses) instead of polling every 5 seconds. Power, volume, mute, audio mode, audio signal, input and Dirac changes reach the Remote as they happen, whether they were made on the front panel, the web UI or the Remote.
+- Polling is kept as a fallback. While the streams are healthy only the 30-second full refresh runs. If a stream drops, the 5-second poll resumes, and firmware without `/ws/state` is polled as before.
+- After a volume change from the Remote, the device's own volume reports are held back for 1.5 seconds, so quick presses no longer make the display jump. The display then settles on the device's value, which also corrects a change the device refused (for example past its maximum volume).
+
+### Added
+- `stream.py`: reconnects with a growing delay and replaces a connection that has gone silent for 30 seconds.
+
+### Tests
+- The fake processor can now stream state. New tests cover the stream, the client's WebSocket and the device's handling of each stream.
+
 ## v0.2.4 - 2026-11-21
 
 ### Changed

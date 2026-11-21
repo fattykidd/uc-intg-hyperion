@@ -33,7 +33,7 @@ An integration driver for the **Unfolded Circle Remote 3** and **Remote Two**, w
   - Bass and treble up/down (1 dB steps) and display brightness up/down (10% steps).
 
 - **Live Sync**
-  - The driver polls the processor, so changes made in the processor's own web interface or on its front panel appear on the Remote within a few seconds.
+  - The driver follows the processor's live state streams, so changes made in the processor's own web interface, on its front panel or from the Remote appear instantly. Sensors the streams don't carry, such as temperature and display brightness, refresh every 30 seconds, and the driver falls back to checking the processor every 5 seconds if the streams are unavailable.
 
 ---
 
@@ -127,8 +127,10 @@ Another copy of the driver is already advertising itself on the network under th
 - Entities become unavailable when the driver cannot reach the processor. Check that the processor is powered on and that its address and port (default 8080) in the integration settings are correct.
 - Some values, such as the Dirac slot and Dirac filtering state, show *Unknown* until the first successful read from the processor after the driver connects.
 
-### Changes made in the processor's web interface are slow to appear
-The driver polls the processor every 5 seconds and refreshes the full state every 30 seconds. Power, volume, mute, input, audio mode, Dirac state and the audio format, bit depth and sample rate follow within about 5 seconds. Other sensors, such as temperature, video format, bass, treble and display brightness, are read every 30 seconds.
+### Changes made on the processor itself take a few seconds to appear
+Normally they appear instantly. The driver follows the processor's live state streams, so power, volume, mute, input, audio mode, Dirac state and the audio format, bit depth and sample rate reach the Remote the moment they change. Other sensors, such as temperature, video format, bass, treble and display brightness, are refreshed every 30 seconds.
+
+If the live streams are unavailable, for example on older firmware or while the processor is rebooting, the driver checks the processor every 5 seconds instead. Look in the driver log for `Lost the audio stream` to see whether this is happening.
 
 ### The bit depth and sample rate sensors show "No Signal"
 The processor reports a bit depth and sample rate of 0 when no audio is playing. The sensors show *No Signal* until audio starts.
