@@ -20,9 +20,10 @@ An integration driver for the **Unfolded Circle Remote 3** and **Remote Two**, w
   - **Audio Mode select**: Direct Mode, DTS Neural:X, Stereo, All Channel Stereo, Dolby Mode, Native and Dolby Surround.
   - **Dirac Slot select**: switch between your Dirac Live filter slots using the names you gave them.
   - **Dirac Filtering switch**: turn Dirac correction on and off.
+   - **Loudness switch**: turn loudness compensation on and off.
 
 - **Sensors**
-  - Dirac active slot and Dirac filtering status.
+  - Dirac active slot, Dirac filtering status and loudness status.
   - Incoming audio: format, bit depth, sample rate and signal details.
   - Incoming video: format and signal details.
   - Volume (percent and decibels), mute, display brightness, input bass and treble, audio mode, active input, processor temperature (°C) and host IP address.
@@ -42,7 +43,7 @@ An integration driver for the **Unfolded Circle Remote 3** and **Remote Two**, w
 These are planned and are **not** available yet:
 
 - Volume safety limits: a power-on default volume and a maximum volume.
-- Channel calibration: individual channel level trim.
+- Channel calibration: individual channel level trim. Low priority: the processor locks speaker levels while Dirac ART is active, so this would only help setups that don't use ART.
 - Hardware triggers: control of the 12V / 5V trigger outputs and voltage mode.
 - EDID: global EDID toggling and per-input EDID status.
 - Firmware and build information, and an overall system health status.

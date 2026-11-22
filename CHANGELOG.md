@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.6 - 2026-11-21
+
+### Added
+- Loudness switch (`switch.<id>.loudness`) to turn loudness compensation on and off from the Remote. It follows changes made in the processor's web UI.
+- Loudness Status sensor (`sensor.<id>.loudness`), for showing the state on a Remote page. It reads On, Off, Unknown (firmware without live streams, until the switch has been used) or Not Supported.
+
+### Changed
+- The Dirac filtering and Loudness switches share one implementation. The Dirac switch behaves as before.
+
+### Fixed
+- The `Following the ... stream` debug lines never appeared in the driver log, because the stream module wasn't set to the level in `UC_LOG_LEVEL`.
+
+### Tests
+- The test processor has a loudness call and a speakers stream. New tests cover the switch and the sensor.
+
 ## v0.2.5 - 2026-11-21
 
 ### Changed
