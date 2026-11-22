@@ -108,11 +108,12 @@ async def test_sensors_follow_the_volume(monkeypatch):
 
 async def test_a_sensor_whose_read_fails_goes_unavailable_instead_of_crashing(monkeypatch):
     rig = await make_rig(monkeypatch)
-    rig.apr.failing.add("/v1/mute")
+    rig.apr.failing.add("/v1/temperature")
+    rig.device.forget_cached()  # the connect above already read the temperature
 
-    await rig.entity("sensor", "mute").sync_state()
+    await rig.entity("sensor", "temperature").sync_state()
 
-    assert rig.remote.last("sensor.dev1.mute", "state") == "UNAVAILABLE"
+    assert rig.remote.last("sensor.dev1.temperature", "state") == "UNAVAILABLE"
 
 
 async def test_sensors_are_unavailable_once_the_device_disconnects(monkeypatch):
@@ -346,8 +347,10 @@ async def test_volume_up_and_down_in_absolute_mode(monkeypatch):
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME_UP) == StatusCodes.OK
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME_UP) == StatusCodes.OK
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME_DOWN) == StatusCodes.OK
+    await rig.device.wait_volume_sent()
 
-    assert rig.apr.volume_posts() == [26, 27, 26]
+    assert rig.apr.volume_posts()[-1] == 26
+    assert rig.apr.state["vol"] == 26
     assert rig.remote.last("media_player.dev1", "volume") == 26
 
 
@@ -355,6 +358,7 @@ async def test_volume_up_in_relative_mode_shows_decibels(monkeypatch):
     rig = await make_rig(monkeypatch, volume_mode="relative", vol=50)
 
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME_UP) == StatusCodes.OK
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.state["vol"] > 50
     assert rig.remote.last("media_player.dev1", "volume") == round(percent_to_db(rig.apr.state["vol"]))
@@ -365,6 +369,7 @@ async def test_the_volume_command_sets_a_percent_in_absolute_mode(monkeypatch):
     rig = await make_rig(monkeypatch)
 
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME, {"volume": 60}) == StatusCodes.OK
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == [60]
 
@@ -373,6 +378,7 @@ async def test_the_volume_command_takes_decibels_in_relative_mode(monkeypatch):
     rig = await make_rig(monkeypatch, volume_mode="relative")
 
     assert await rig.command(rig.media_player, PlayerCommands.VOLUME, {"volume": -40}) == StatusCodes.OK
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == [round(db_to_percent(-40))]
 

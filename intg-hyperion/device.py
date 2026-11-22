@@ -12,8 +12,8 @@ import asyncio
 import json
 import logging
 from asyncio import AbstractEventLoop
-from collections.abc import Callable
-from typing import Any, NamedTuple
+from collections.abc import Awaitable, Callable
+from typing import Any, NamedTuple, TypeVar
 
 import aiohttp
 from ucapi import media_player
@@ -35,6 +35,7 @@ from const import (
     DEFAULT_INPUTS,
     FULL_REFRESH_INTERVAL,
     POLL_INTERVAL,
+    SENSOR_CACHE_TTL,
     TONE_MAX_DB,
     TONE_MIN_DB,
     VOLUME_MODE_RELATIVE,
@@ -45,6 +46,8 @@ from stream import StateStream
 from volume import percent_to_db, step_percent
 
 _LOG = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 INPUT_ACTIVE_PATH = "/api/atlas/input/active"
 
@@ -100,7 +103,8 @@ class Apr16(StatelessHTTPDevice):
         # Volume: percent is the source of truth, everything shown is derived from it.
         self._volume_mode: str = device_config.volume_mode
         self._volume_pct: int = 0
-        self._vol_lock = asyncio.Lock()  # keeps volume POSTs in the order they were pressed
+        self._vol_pending: int | None = None  # the newest volume asked for that the device has not been sent yet
+        self._vol_sender: asyncio.Task | None = None  # sends _vol_pending; one at a time keeps presses in order
         self._vol_changes = 0  # counts local volume changes, so a stale poll result can be discarded
         self._vol_settle_until = 0.0  # loop time until which the device's reports of the volume are held back
         self._vol_reconcile: asyncio.TimerHandle | None = None
@@ -114,6 +118,7 @@ class Apr16(StatelessHTTPDevice):
 
         self._poll_task: asyncio.Task | None = None
         self._streams: list[StateStream] = []
+        self._reads: dict[str, tuple[float, asyncio.Task]] = {}  # see cached()
 
         # Names fetched from the device after connecting.
         self._input_names_map: dict[int, str] = {}
@@ -205,6 +210,16 @@ class Apr16(StatelessHTTPDevice):
         return self._dirac_filtering
 
     @property
+    def muted(self) -> bool:
+        """Whether the device is muted, as last reported."""
+        return bool(self._media_player_attributes[self.identifier].MUTED)
+
+    @property
+    def sound_mode(self) -> str:
+        """The audio mode the device reports (its own name for it), as last reported."""
+        return self._media_player_attributes[self.identifier].SOUND_MODE or ""
+
+    @property
     def volume_pct(self) -> int:
         """Current volume as a percent (0-100), from the local cache."""
         return self._volume_pct
@@ -231,6 +246,36 @@ class Apr16(StatelessHTTPDevice):
         Called by the entity's sync_state() after push_update() fires.
         """
         return self._media_player_attributes.get(device_id)
+
+    async def cached(self, key: str, fetch: Callable[[], Awaitable[_T]], ttl: float | None = None) -> _T:
+        """
+        Read a value from the device, or reuse the last read of the same key if it is younger than ttl seconds.
+
+        Every change tells every entity to refresh. Sensors that went to the device each time turned one
+        volume press into a burst of requests, which is what made the remote stop responding. Reads of the
+        same key that overlap share one request, and one that failed is not remembered.
+        """
+        loop = asyncio.get_running_loop()
+        max_age = SENSOR_CACHE_TTL if ttl is None else ttl
+        entry = self._reads.get(key)
+        if entry is not None:
+            started, task = entry
+            if not task.done():
+                return await asyncio.shield(task)  # a read is already on its way: share it
+            if not task.cancelled() and task.exception() is None and loop.time() - started < max_age:
+                return task.result()
+
+        task = loop.create_task(fetch())
+        self._reads[key] = (loop.time(), task)
+        return await asyncio.shield(task)
+
+    def forget_cached(self, *keys: str) -> None:
+        """Drop remembered reads, so the next one goes to the device. With no keys, drop all of them."""
+        if keys:
+            for key in keys:
+                self._reads.pop(key, None)
+        else:
+            self._reads.clear()
 
     # =========================================================================
     # Connection management
@@ -287,6 +332,7 @@ class Apr16(StatelessHTTPDevice):
         """Stop watching the device, disconnect and release the shared HTTP session."""
         await self._stop_streams()
         await self._stop_polling()
+        await self._stop_volume_sender()
         if self._vol_reconcile is not None:
             self._vol_reconcile.cancel()
             self._vol_reconcile = None
@@ -339,11 +385,13 @@ class Apr16(StatelessHTTPDevice):
 
         attrs.STATE = media_player.States.ON if is_on else media_player.States.OFF
         attrs.MUTED = muted
+        if attrs.SOURCE != source:
+            self.forget_cached()  # tone and the signal details belong to the input that was active
         attrs.SOURCE = source
         attrs.SOUND_MODE = sound_mode
 
         # A volume change made through the remote while we were reading is newer than what we read.
-        if not self._vol_lock.locked() and self._vol_changes == changes_at_start:
+        if not self._volume_in_flight and self._vol_changes == changes_at_start:
             self._volume_pct = self._device_volume_pct = volume_pct
             attrs.VOLUME = self._osd_volume()
 
@@ -489,13 +537,19 @@ class Apr16(StatelessHTTPDevice):
             bit_depth=_as_int(state.get("bit_depth"), known.bit_depth),
             sample_rate=_as_int(state.get("sample_rate"), known.sample_rate),
         )
+        if self._audio_signal != known:
+            self.forget_cached("audio_detail")  # its description comes from the signal that just changed
 
     def _apply_inputs_state(self, state: dict[str, Any]) -> None:
         # The audio side decides what the remote shows as the source, as with the REST read.
         # (Audio and video can be on different inputs; usually they are the same one.)
         name = state.get("active_audio_name") or state.get("active_input")
         if isinstance(name, str) and name:
-            self._media_player_attributes[self.identifier].SOURCE = self._source_display_name(name)
+            attrs = self._media_player_attributes[self.identifier]
+            source = self._source_display_name(name)
+            if attrs.SOURCE != source:
+                self.forget_cached()  # tone and the signal details belong to the input that was active
+            attrs.SOURCE = source
 
     def _apply_dirac_state(self, state: dict[str, Any]) -> None:
         slot = _as_int(state.get("active_slot"))
@@ -513,7 +567,7 @@ class Apr16(StatelessHTTPDevice):
 
     def _volume_settling(self) -> bool:
         """True while a volume change of ours is still working its way through the device."""
-        return self._vol_lock.locked() or asyncio.get_running_loop().time() < self._vol_settle_until
+        return self._volume_in_flight or asyncio.get_running_loop().time() < self._vol_settle_until
 
     def _adopt_device_volume(self) -> None:
         """Take the volume the device last reported as the real one. Returns nothing; the caller notifies."""
@@ -625,6 +679,7 @@ class Apr16(StatelessHTTPDevice):
         """Set front panel display brightness via POST /v1/displaybrightness."""
         _LOG.debug("[%s] Setting display brightness to: %s", self.log_id, brightness)
         await self._api.post("/v1/displaybrightness", {"brightness": brightness})
+        self.forget_cached("brightness")
         return True
 
     async def step_display_brightness(self, delta: int) -> int:
@@ -657,8 +712,18 @@ class Apr16(StatelessHTTPDevice):
             attrs.VOLUME = self._osd_volume()
         self.push_update()
 
+    @property
+    def _volume_in_flight(self) -> bool:
+        """True while a volume change of ours has yet to reach the device."""
+        return self._vol_pending is not None or (self._vol_sender is not None and not self._vol_sender.done())
+
     async def set_volume_pct(self, pct: int) -> None:
-        """Set the volume. Updates the remote immediately, then sends the integer percent."""
+        """
+        Set the volume. Shows it on the remote at once and returns; the device is told in the background.
+
+        The remote waits for a command to return, so it must never wait on the device. Presses made while
+        a request is still on its way are merged: only the newest volume is sent next.
+        """
         pct = max(0, min(100, int(round(pct))))
         if pct == self._volume_pct:
             return
@@ -668,17 +733,35 @@ class Apr16(StatelessHTTPDevice):
         self._hold_back_device_volume()
         self._publish_volume()
 
-        failed = False
+        self._vol_pending = pct
+        if self._vol_sender is None or self._vol_sender.done():
+            self._vol_sender = asyncio.create_task(self._send_volume())
+
+    async def _send_volume(self) -> None:
+        """Send the newest requested volume until nothing newer waits. If the device refuses, show its real volume."""
         try:
-            async with self._vol_lock:
+            while (pct := self._vol_pending) is not None:
+                self._vol_pending = None
                 await self._api.post("/v1/vol", {"level": pct})
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _LOG.exception("[%s] Volume change failed", self.log_id)
-            failed = True
-
-        # Put the real value back, unless more presses are queued (the last one will do it).
-        if failed and not self._vol_lock.locked():
+            self._vol_pending = None
+            self._vol_sender = None  # no longer in flight, so the real volume can be shown
             await self.resync_volume()
+
+    async def _stop_volume_sender(self) -> None:
+        sender, self._vol_sender = self._vol_sender, None
+        self._vol_pending = None
+        if sender is not None and not sender.done():
+            sender.cancel()
+            await asyncio.gather(sender, return_exceptions=True)
+
+    async def wait_volume_sent(self) -> None:
+        """Wait until every volume change made so far has been sent to the device."""
+        while (sender := self._vol_sender) is not None and not sender.done():
+            await asyncio.gather(sender, return_exceptions=True)
 
     async def step_volume(self, direction: int) -> None:
         """Step the volume up (direction > 0) or down by one step in the current volume mode."""
@@ -686,7 +769,7 @@ class Apr16(StatelessHTTPDevice):
 
     async def resync_volume(self) -> None:
         """Replace the cached volume with what the device reports."""
-        if self._vol_lock.locked():
+        if self._volume_in_flight:
             return  # a change is in flight, don't overwrite it
         try:
             self._volume_pct = await self.get_volume()
@@ -814,6 +897,7 @@ class Apr16(StatelessHTTPDevice):
         attrs = self._media_player_attributes.get(self.identifier)
         if attrs:
             attrs.SOURCE = source
+        self.forget_cached()  # tone and the signal details belong to the input that was active
         self.push_update()
 
     # =========================================================================
@@ -943,6 +1027,7 @@ class Apr16(StatelessHTTPDevice):
         """Set an input's bass level via POST /api/atlas/input/{input}/bass/{level}."""
         _LOG.debug("[%s] Setting input bass for %s to: %s", self.log_id, input_name, bass)
         await self._api.post(f"/api/atlas/input/{input_name}/bass/{bass}", {"inputId": 0})
+        self.forget_cached(f"bass:{input_name}")
         return True
 
     async def get_input_treble(self, input_name: str) -> int:
@@ -954,6 +1039,7 @@ class Apr16(StatelessHTTPDevice):
         """Set an input's treble level via POST /api/atlas/input/{input}/treb/{level}."""
         _LOG.debug("[%s] Setting input treble for %s to: %s", self.log_id, input_name, treble)
         await self._api.post(f"/api/atlas/input/{input_name}/treb/{treble}", {"inputId": 0})
+        self.forget_cached(f"treble:{input_name}")
         return True
 
     async def step_input_tone(self, band: str, delta: int) -> int:

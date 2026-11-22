@@ -13,11 +13,12 @@ from ucapi_framework import SelectEntity
 
 from const import API_TO_UI_AUDIO_MODE, AUDIO_MODE_MAPPING, DEFAULT_DIRAC_SLOTS
 from device import Apr16
+from sent_once import SendsOnlyWhenChanged
 
 _LOG = logging.getLogger(__name__)
 
 
-class Apr16AudioModeSelect(SelectEntity):
+class Apr16AudioModeSelect(SendsOnlyWhenChanged, SelectEntity):
     """
     Select entity for changing audio listening/upmixing modes.
     """
@@ -38,21 +39,19 @@ class Apr16AudioModeSelect(SelectEntity):
         self.subscribe_to_device(device)
 
     async def sync_state(self) -> None:
-        """Synchronize entity state with the device."""
-        try:
-            raw_mode = await self._device.get_audio_mode()
-            display_option = API_TO_UI_AUDIO_MODE.get(raw_mode, "Stereo")
-            self.update(
-                {
-                    Attributes.STATE: States.ON,
-                    Attributes.OPTIONS: list(AUDIO_MODE_MAPPING.keys()),
-                    Attributes.CURRENT_OPTION: display_option,
-                },
-                force=True,
-            )
-        except Exception as err:
-            _LOG.debug("[%s] Failed to sync audio mode: %s", self._device.log_id, err)
+        """Show the audio mode the device last reported, or unavailable while disconnected."""
+        if not self._device.is_connected:
+            self.forget_last_sent()
             self.update({Attributes.STATE: States.UNAVAILABLE})
+            return
+
+        self.send_complete(
+            {
+                Attributes.STATE: States.ON,
+                Attributes.OPTIONS: list(AUDIO_MODE_MAPPING.keys()),
+                Attributes.CURRENT_OPTION: API_TO_UI_AUDIO_MODE.get(self._device.sound_mode, "Stereo"),
+            }
+        )
 
     async def _handle_command(
         self, entity: Any, cmd_id: str, params: dict[str, Any] | None
@@ -80,7 +79,7 @@ class Apr16AudioModeSelect(SelectEntity):
             return StatusCodes.SERVER_ERROR
 
 
-class Apr16DiracSlotSelect(SelectEntity):
+class Apr16DiracSlotSelect(SendsOnlyWhenChanged, SelectEntity):
     """
     Select entity for changing active Dirac Live filter slots with custom profile names.
     """
@@ -105,18 +104,18 @@ class Apr16DiracSlotSelect(SelectEntity):
     async def sync_state(self) -> None:
         """Synchronize active Dirac slot state and custom options with the device."""
         if not self._device.is_connected:
+            self.forget_last_sent()
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
 
         try:
             raw_slot = self._device.dirac_slot
             if raw_slot is None:  # not read from the device yet
-                self.update(
+                self.send_complete(
                     {
                         Attributes.STATE: States.UNKNOWN,
                         Attributes.OPTIONS: list(self._device.dirac_slot_names.values()),
-                    },
-                    force=True,
+                    }
                 )
                 return
 
@@ -126,16 +125,16 @@ class Apr16DiracSlotSelect(SelectEntity):
             dynamic_options = list(slot_names_map.values())
             display_option = slot_names_map.get(raw_slot, f"Slot {raw_slot}")
 
-            self.update(
+            self.send_complete(
                 {
                     Attributes.STATE: States.ON,
                     Attributes.OPTIONS: dynamic_options,
                     Attributes.CURRENT_OPTION: display_option,
-                },
-                force=True,
+                }
             )
         except Exception as err:
             _LOG.debug("[%s] Failed to sync Dirac slot select: %s", self._device.log_id, err)
+            self.forget_last_sent()
             self.update({Attributes.STATE: States.UNAVAILABLE})
 
     async def _handle_command(

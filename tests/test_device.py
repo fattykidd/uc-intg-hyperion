@@ -63,6 +63,7 @@ async def test_disconnecting_closes_the_session_and_reconnecting_reopens_it(monk
 
     assert await rig.device.connect()
     await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
     assert rig.apr.state["vol"] == 26
     assert rig.apr.sessions_opened == 2
 
@@ -75,6 +76,7 @@ async def test_absolute_mode_steps_one_percent_and_shows_percent(monkeypatch):
 
     for _ in range(10):
         await rig.device.step_volume(1)
+        await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == list(range(26, 36))
     assert rig.remote.last("media_player.dev1", "volume") == 35
@@ -87,6 +89,7 @@ async def test_relative_mode_shows_db_but_always_sends_whole_percent(monkeypatch
 
     for direction in (-1, -1, 1, 1, 1):
         await rig.device.step_volume(direction)
+        await rig.device.wait_volume_sent()
 
     sent = rig.apr.volume_posts()
     assert all(isinstance(level, int) and 0 < level <= 100 for level in sent)
@@ -100,6 +103,7 @@ async def test_relative_mode_always_moves_even_where_one_db_is_less_than_a_perce
     rig = await make_rig(monkeypatch, volume_mode="relative", vol=0)
 
     await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == [1]
 
@@ -116,19 +120,22 @@ async def test_the_remote_is_updated_before_the_processor_answers(monkeypatch):
 
     monkeypatch.setattr(rig.device._api, "post", post)
     await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
 
     assert shown_when_sent == [26]
 
 
-async def test_a_burst_of_presses_reaches_the_processor_in_order(monkeypatch):
-    import asyncio
-
+async def test_a_burst_of_presses_ends_at_the_right_volume(monkeypatch):
     rig = await make_rig(monkeypatch, vol=25)
 
-    await asyncio.gather(*(rig.device.step_volume(1) for _ in range(6)))
+    for _ in range(6):
+        await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
 
-    assert rig.apr.volume_posts() == [26, 27, 28, 29, 30, 31]
+    assert rig.apr.volume_posts()[-1] == 31
     assert rig.apr.state["vol"] == 31
+    posts = rig.apr.volume_posts()
+    assert posts == sorted(posts), "the processor never sees an older volume after a newer one"
 
 
 async def test_a_failed_change_puts_the_real_volume_back_on_the_remote(monkeypatch):
@@ -136,6 +143,7 @@ async def test_a_failed_change_puts_the_real_volume_back_on_the_remote(monkeypat
     rig.apr.failing_posts.add("/v1/vol")  # the change is refused, but reading the volume still works
 
     await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
     await settle()
 
     assert rig.device.volume_pct == 25
@@ -147,6 +155,7 @@ async def test_a_dropped_connection_does_not_lose_the_change(monkeypatch):
     rig.apr.stale_connections["/v1/vol"] = 1
 
     await rig.device.step_volume(1)
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.state["vol"] == 26
 
@@ -156,6 +165,7 @@ async def test_nothing_is_sent_past_either_end_of_the_scale(monkeypatch, start, 
     rig = await make_rig(monkeypatch, vol=start)
 
     await rig.device.step_volume(direction)
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == []
 
@@ -165,6 +175,7 @@ async def test_set_volume_pct_clamps_and_rounds_to_a_whole_percent(monkeypatch, 
     rig = await make_rig(monkeypatch, vol=25)
 
     await rig.device.set_volume_pct(asked)
+    await rig.device.wait_volume_sent()
 
     assert rig.apr.volume_posts() == [sent]
     assert rig.apr.rejected == []
@@ -446,6 +457,7 @@ async def test_nothing_is_pushed_while_nothing_changes(monkeypatch, fast_polling
 async def test_the_slow_sensors_are_refreshed_on_the_slower_schedule(monkeypatch):
     monkeypatch.setattr(device_module, "POLL_INTERVAL", 0.02)
     monkeypatch.setattr(device_module, "FULL_REFRESH_INTERVAL", 0.1)
+    monkeypatch.setattr(device_module, "SENSOR_CACHE_TTL", 0.05)
     rig = await make_rig(monkeypatch)
 
     rig.apr.state["brightness"] = 80  # not part of the core state that is watched
