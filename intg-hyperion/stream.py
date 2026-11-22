@@ -133,7 +133,8 @@ class StateStream:
 
     async def _follow(self) -> None:
         """One connection, from opening it until it ends or goes quiet."""
-        ws = await asyncio.wait_for(self._connect(), STREAM_CONNECT_TIMEOUT)
+        async with asyncio.timeout(STREAM_CONNECT_TIMEOUT):  # not wait_for(): before Python 3.12 it can swallow a cancellation
+            ws = await self._connect()
         self._last_state = None  # the first message of a connection is passed on even if it is unchanged
         self._last_seen = time.monotonic()
         self._connected = True

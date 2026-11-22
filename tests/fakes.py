@@ -265,7 +265,8 @@ class FakeStream:
         self._messages.put_nowait(_Message(aiohttp.WSMsgType.CLOSED, None))
 
     async def receive(self, timeout: float | None = None) -> _Message:
-        return await asyncio.wait_for(self._messages.get(), timeout)
+        async with asyncio.timeout(timeout):
+            return await self._messages.get()
 
     async def close(self) -> None:
         self.closed = True
