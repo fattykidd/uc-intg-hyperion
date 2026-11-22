@@ -14,6 +14,7 @@ from ucapi_framework import MediaPlayerEntity
 
 from const import DEFAULT_INPUTS
 from device import Apr16
+from sent_once import SendsOnlyWhenChanged
 from volume import db_to_percent
 
 _LOG = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ FEATURES = [
     Features.VOLUME_UP_DOWN,
 ]
 
-class Apr16MediaPlayer(MediaPlayerEntity):
+class Apr16MediaPlayer(SendsOnlyWhenChanged, MediaPlayerEntity):
     """Media player entity for the AudioControl Hyperion APR-16 processor."""
 
     def __init__(self, device_config, device: Apr16):
@@ -54,12 +55,13 @@ class Apr16MediaPlayer(MediaPlayerEntity):
     async def sync_state(self) -> None:
         """Synchronize entity state with the device attributes cache."""
         if not self._device.is_connected:
+            self.forget_last_sent()
             self.update({Attributes.STATE: States.UNAVAILABLE})
             return
 
         attrs = self._device.get_media_player_attributes(self._device_config.identifier)
         if attrs:
-            self.update(
+            self.send_complete(
                 {
                     Attributes.STATE: attrs.STATE,
                     Attributes.VOLUME: int(attrs.VOLUME) if attrs.VOLUME is not None else 0,
@@ -67,8 +69,7 @@ class Apr16MediaPlayer(MediaPlayerEntity):
                     Attributes.SOURCE: attrs.SOURCE,
                     # Custom input names can arrive after the entity was created.
                     Attributes.SOURCE_LIST: self._device.source_list,
-                },
-                force=True,
+                }
             )
 
     async def _handle_command(

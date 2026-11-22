@@ -18,6 +18,8 @@ DEFAULT_TIMEOUT = 5.0  # seconds
 # Normally the device's state streams do this. Polling takes over whenever they are down.
 POLL_INTERVAL = 5.0  # seconds between checks of power, volume, mute, input and audio mode
 FULL_REFRESH_INTERVAL = 30.0  # seconds between refreshes of every sensor, even if nothing above changed
+SENSOR_CACHE_TTL = 25.0  # seconds a sensor reuses a value it read from the device; just under FULL_REFRESH_INTERVAL
+HOST_IP_CACHE_TTL = 300.0  # the address the device reports about itself hardly ever changes
 
 # State streams (see stream.py)
 STREAM_SILENCE_TIMEOUT = 30.0  # seconds without a message (the device sends a heartbeat every ~15 s) before reconnecting

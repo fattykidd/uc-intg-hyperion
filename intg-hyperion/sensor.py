@@ -12,7 +12,7 @@ import logging
 from ucapi.sensor import Attributes, DeviceClasses, Options, States
 from ucapi_framework import SensorEntity
 
-from const import API_TO_UI_AUDIO_MODE, DEFAULT_INPUTS
+from const import API_TO_UI_AUDIO_MODE, DEFAULT_INPUTS, HOST_IP_CACHE_TTL
 from device import Apr16
 
 _LOG = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ class Apr16MuteSensor(Apr16Sensor):
     initial = "Unmuted"
 
     async def read(self) -> str:
-        return "Muted" if await self._device.get_mute() else "Unmuted"
+        return "Muted" if self._device.muted else "Unmuted"
 
 
 # --- Signal -----------------------------------------------------------------
@@ -144,7 +144,7 @@ class Apr16AudioDetailSensor(Apr16Sensor):
     label = "Audio Signal"
 
     async def read(self) -> str:
-        details = await self._device.get_audio_detail()
+        details = await self._device.cached("audio_detail", self._device.get_audio_detail)
         return str(details.get("detail") or "Unknown")
 
 
@@ -180,7 +180,7 @@ class Apr16VideoFormatSensor(Apr16Sensor):
     initial = "No Signal"
 
     async def read(self) -> str:
-        return await self._device.get_video_format() or "No Signal"
+        return await self._device.cached("video_format", self._device.get_video_format) or "No Signal"
     
 
 class Apr16VideoDetailSensor(Apr16Sensor):
@@ -191,7 +191,7 @@ class Apr16VideoDetailSensor(Apr16Sensor):
     initial = "No Signal"
 
     async def read(self) -> str:
-        data = await self._device.get_video_detail()
+        data = await self._device.cached("video_detail", self._device.get_video_detail)
         return str(data.get("detail") or "No Signal")
 
 
@@ -205,7 +205,7 @@ class Apr16AudioModeSensor(Apr16Sensor):
     label = "Audio Mode"
 
     async def read(self) -> str:
-        mode = await self._device.get_audio_mode()
+        mode = self._device.sound_mode
         return API_TO_UI_AUDIO_MODE.get(mode, mode) or "Unknown"
 
 
@@ -216,7 +216,7 @@ class Apr16ActiveInputSensor(Apr16Sensor):
     label = "Active Input"
 
     async def read(self) -> str:
-        return await self._device.get_active_input_name() or "Unknown"
+        return self._device.source or "Unknown"
 
 
 class Apr16InputBassSensor(Apr16Sensor):
@@ -228,8 +228,9 @@ class Apr16InputBassSensor(Apr16Sensor):
     custom_unit = "dB"
 
     async def read(self) -> str:
-        active_input = await self._device.get_active_input() or DEFAULT_INPUTS[0]
-        return str(await self._device.get_input_bass(active_input))
+        active_input = await self._device.cached("active_input", self._device.get_active_input) or DEFAULT_INPUTS[0]
+        level = await self._device.cached(f"bass:{active_input}", lambda: self._device.get_input_bass(active_input))
+        return str(level)
 
 
 class Apr16InputTrebleSensor(Apr16Sensor):
@@ -241,8 +242,9 @@ class Apr16InputTrebleSensor(Apr16Sensor):
     custom_unit = "dB"
 
     async def read(self) -> str:
-        active_input = await self._device.get_active_input() or DEFAULT_INPUTS[0]
-        return str(await self._device.get_input_treble(active_input))
+        active_input = await self._device.cached("active_input", self._device.get_active_input) or DEFAULT_INPUTS[0]
+        level = await self._device.cached(f"treble:{active_input}", lambda: self._device.get_input_treble(active_input))
+        return str(level)
 
 
 class Apr16DiracSlotSensor(Apr16Sensor):
@@ -304,7 +306,7 @@ class Apr16DisplayBrightnessSensor(Apr16Sensor):
     custom_unit = "%"
 
     async def read(self) -> str:
-        return str(await self._device.get_display_brightness())
+        return str(await self._device.cached("brightness", self._device.get_display_brightness))
 
 
 class Apr16TemperatureSensor(Apr16Sensor):
@@ -316,7 +318,7 @@ class Apr16TemperatureSensor(Apr16Sensor):
     custom_unit = "°C"
 
     async def read(self) -> str:
-        return f"{await self._device.get_temperature():.1f}"
+        return f"{await self._device.cached('temperature', self._device.get_temperature):.1f}"
 
 
 class Apr16HostIpSensor(Apr16Sensor):
@@ -327,4 +329,4 @@ class Apr16HostIpSensor(Apr16Sensor):
     initial = "0.0.0.0"
 
     async def read(self) -> str:
-        return await self._device.get_host_ip()
+        return await self._device.cached("host_ip", self._device.get_host_ip, ttl=HOST_IP_CACHE_TTL)

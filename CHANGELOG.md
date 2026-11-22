@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.7 - 2026-11-22
+
+### Fixed
+- The Remote no longer stops responding ("the Hyperion is not responding") after a press or two of the volume buttons.
+  Every change makes every entity refresh, and the sensors each asked the processor for their value while the select
+  and the media player resent themselves in full, so one press became a burst of requests to the processor and of
+  messages to the Remote.
+  - Sensors now show what the driver already knows (mute, audio mode, active input). The values that only the
+    processor can tell (temperature, brightness, tone, signal details, host IP) are read at most once every 25
+    seconds, and again at once when something that affects them changes (input, tone or brightness set from the
+    Remote, the audio signal).
+  - The audio mode select, Dirac slot select and media player send themselves to the Remote only when something about
+    them changed, not on every refresh.
+  - A volume command is answered at once and the processor is told in the background. Presses made while a request is
+    still on its way are merged, so the processor only ever hears the newest volume. If it refuses a change, the
+    display goes back to its real volume.
+
+### Tests
+- New `test_responsiveness.py`: the Remote never waits on the processor, quick presses are merged, a press causes no
+  reads of the processor, and entities are not resent unchanged. Existing volume tests wait for the background send.
+
 ## v0.2.6 - 2026-11-21
 
 ### Added
