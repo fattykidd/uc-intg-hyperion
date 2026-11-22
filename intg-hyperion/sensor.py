@@ -275,6 +275,23 @@ class Apr16DiracFilteringSensor(Apr16Sensor):
         return "Active" if filtering else "Off"
 
 
+class Apr16LoudnessSensor(Apr16Sensor):
+    """Whether loudness compensation is on."""
+
+    suffix = "loudness"
+    label = "Loudness Status"
+    initial = "Unknown"
+    device_class = None
+
+    async def read(self) -> str:
+        if self._device.loudness_supported is False:
+            return "Not Supported"
+        loudness = self._device.loudness
+        if loudness is None:
+            return "Unknown"
+        return "On" if loudness else "Off"
+
+
 # --- System -----------------------------------------------------------------
 
 

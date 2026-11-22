@@ -5,6 +5,7 @@ from ucapi import StatusCodes
 from fakes import make_rig, settle, wait_until
 
 SWITCH = "switch.dev1.loudness"
+SENSOR = "sensor.dev1.loudness"
 
 
 async def streaming_rig(monkeypatch, **options):
@@ -115,3 +116,37 @@ async def test_the_switch_is_unavailable_when_disconnected(monkeypatch):
     await rig.entity("switch", "loudness").sync_state()
 
     assert rig.remote.last(SWITCH, "state") == "UNAVAILABLE"
+
+
+# --------------------------------------------------------------------------- the companion sensor
+
+
+async def test_the_sensor_shows_loudness_on_and_off(monkeypatch):
+    rig = await streaming_rig(monkeypatch, loudness=False)
+    assert rig.remote.last(SENSOR, "value") == "Off"
+
+    rig.apr.stream("speakers", loudness_enabled=True)
+    await wait_until(lambda: rig.remote.last(SENSOR, "value") == "On")
+
+
+async def test_the_sensor_follows_the_switch(monkeypatch):
+    rig = await streaming_rig(monkeypatch, loudness=False)
+
+    assert await rig.command(rig.entity("switch", "loudness"), "on") == StatusCodes.OK
+
+    await wait_until(lambda: rig.remote.last(SENSOR, "value") == "On")
+
+
+async def test_the_sensor_is_unknown_when_the_device_has_not_reported_loudness(monkeypatch):
+    rig = await make_rig(monkeypatch)  # firmware without streams
+
+    assert rig.remote.last(SENSOR, "value") == "Unknown"
+
+
+async def test_the_sensor_says_when_a_unit_has_no_loudness(monkeypatch):
+    rig = await streaming_rig(monkeypatch)
+
+    rig.apr.stream("speakers", loudness_capability="unsupported")
+
+    await wait_until(lambda: rig.remote.last(SENSOR, "value") == "Not Supported")
+

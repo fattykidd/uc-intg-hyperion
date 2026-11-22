@@ -35,6 +35,7 @@ from button import (
 from sensor import (
     Apr16AudioFormatSensor,
     Apr16DiracFilteringSensor,
+    Apr16LoudnessSensor,
     Apr16AudioBitDepthSensor,
     Apr16AudioSampleRateSensor,
     Apr16VideoDetailSensor,
@@ -74,6 +75,7 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16DiracSlotSensor,
                 Apr16AudioFormatSensor,
                 Apr16DiracFilteringSensor,
+                Apr16LoudnessSensor,
                 Apr16AudioBitDepthSensor,
                 Apr16AudioSampleRateSensor,
                 Apr16VideoDetailSensor,
