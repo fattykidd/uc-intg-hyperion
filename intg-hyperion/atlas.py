@@ -1,5 +1,5 @@
 """
-Dirac Live control through the APR-16's Atlas service (Connect protocol, port 80).
+Dirac Live and loudness control through the APR-16's Atlas service (Connect protocol, port 80).
 
 These calls are not part of the documented REST API. The payloads are raw
 protobuf bytes captured from the device's own web UI, so this module only holds
@@ -17,6 +17,7 @@ GET_FILTER_SLOTS = "GetDiracFilterSlots"
 GET_FILTERING = "GetDiracFiltering"
 SET_FILTER_SLOT = "SetDiracFilterSlot"
 SET_FILTERING = "SetDiracFiltering"
+SET_LOUDNESS = "SetDSP2Loudness"
 
 # Request bodies, keyed by the slot index they select.
 SLOT_PAYLOADS: dict[int, bytes] = {
@@ -26,6 +27,8 @@ SLOT_PAYLOADS: dict[int, bytes] = {
 }
 FILTERING_ON = bytes.fromhex("080110011801")
 FILTERING_OFF = bytes.fromhex("10011801")
+LOUDNESS_ON = bytes.fromhex("0801")
+LOUDNESS_OFF = b""  # protobuf leaves out a zero value, so "off" is an empty request
 
 _SLOT_NAME_PATTERN = re.compile(rb"\x0b([^\x1a]+)\x1a")
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")

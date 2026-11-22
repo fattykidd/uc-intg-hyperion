@@ -60,6 +60,7 @@ class FakeApr16:
             "sample": 48000,
             "dirac": False,  # master Dirac filtering
             "slot": 0,  # active Dirac slot
+            "loudness": False,
             "format": "Dolby Atmos",
         }
         self.input_names = {1: "Apple TV", 3: "PS5"}
@@ -78,7 +79,7 @@ class FakeApr16:
         self.sessions_opened = 0
 
         self.streams_supported = False  # whether /ws/state exists (older firmware has no such endpoint)
-        self.stream_changes: dict[str, dict[str, Any]] = {"audio": {}, "inputs": {}, "dirac": {}}
+        self.stream_changes: dict[str, dict[str, Any]] = {"audio": {}, "inputs": {}, "dirac": {}, "speakers": {}}
         self.stream_requests: list[str] = []  # the kind of every stream that was asked for
         self.open_streams: list[FakeStream] = []
 
@@ -100,6 +101,7 @@ class FakeApr16:
             },
             "inputs": {"active_audio_name": state["source"], "active_input": state["source"]},
             "dirac": {"active_slot": state["slot"], "filtering_enabled": state["dirac"]},
+            "speakers": {"layout": "7.3.6", "loudness_capability": "supported", "loudness_enabled": state["loudness"], "speakers": []},
         }
         return {**payloads[kind], **self.stream_changes[kind]}
 
@@ -160,6 +162,9 @@ class FakeApr16:
                 self.state["slot"] = body[1] if body[:1] == b"\x08" else 0
             if name == "SetDiracFiltering":
                 self.state["dirac"] = body[:2] == b"\x08\x01"
+            if name == "SetDSP2Loudness":
+                self.state["loudness"] = body == b"\x08\x01"  # off is an empty body
+                self.stream("speakers", loudness_enabled=self.state["loudness"])  # the device reports what it did
             return 200, b""
 
         if path in self.overrides:

@@ -26,10 +26,10 @@ async def streaming_rig(monkeypatch, **options):
 # --------------------------------------------------------------------------- following the streams
 
 
-async def test_the_device_asks_for_the_audio_inputs_and_dirac_streams(monkeypatch):
+async def test_the_device_asks_for_the_audio_inputs_dirac_and_speakers_streams(monkeypatch):
     rig = await streaming_rig(monkeypatch)
 
-    assert sorted(rig.apr.stream_requests) == ["audio", "dirac", "inputs"]
+    assert sorted(rig.apr.stream_requests) == ["audio", "dirac", "inputs", "speakers"]
 
 
 async def test_a_change_made_on_the_device_reaches_the_remote_without_polling(monkeypatch):
@@ -116,6 +116,7 @@ async def test_nothing_is_pushed_when_a_state_repeats(monkeypatch):
         rig.apr.stream("audio")  # the device repeats its audio state every second
         rig.apr.stream("inputs")
         rig.apr.stream("dirac")
+        rig.apr.stream("speakers")
     await settle()
 
     assert len(rig.remote.updates) == pushed
@@ -225,4 +226,4 @@ async def test_reconnecting_does_not_open_a_second_set_of_streams(monkeypatch):
     await settle()
 
     assert rig.device._streams is streams
-    assert len(rig.apr.stream_requests) == 3
+    assert len(rig.apr.stream_requests) == 4

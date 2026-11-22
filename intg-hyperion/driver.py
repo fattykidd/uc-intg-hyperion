@@ -53,7 +53,7 @@ from sensor import (
     Apr16TemperatureSensor,
 )
 
-from switch import Apr16DiracFilteringSwitch
+from switch import Apr16DiracFilteringSwitch, Apr16LoudnessSwitch
 from setup_flow import HyperionSetupFlow
 
 _LOG = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ class Apr16Driver(BaseIntegrationDriver[Apr16, APR16Config]):
                 Apr16AudioModeSelect,
                 Apr16DiracSlotSelect,
                 Apr16DiracFilteringSwitch,
+                Apr16LoudnessSwitch,
                 Apr16DiracSlotSensor,
                 Apr16AudioFormatSensor,
                 Apr16DiracFilteringSensor,
@@ -108,7 +109,7 @@ async def main():
 
     # Configure logging level from environment variable
     level = os.getenv("UC_LOG_LEVEL", "DEBUG").upper()
-    for module in ("driver", "media_player", "device", "client", "setup_flow"):
+    for module in ("driver", "media_player", "device", "client", "stream", "setup_flow"):
         logging.getLogger(module).setLevel(level)
 
     # Instantiate our custom driver class

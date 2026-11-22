@@ -108,6 +108,8 @@ class Apr16(StatelessHTTPDevice):
 
         self._dirac_filtering: bool | None = None  # None until the device has been read
         self._dirac_slot: int | None = None
+        self._loudness: bool | None = None  # None until the device's speakers stream has reported it
+        self._loudness_supported: bool | None = None
         self._audio_signal: AudioSignal | None = None
 
         self._poll_task: asyncio.Task | None = None
@@ -186,6 +188,16 @@ class Apr16(StatelessHTTPDevice):
     def dirac_slot(self) -> int | None:
         """The active Dirac slot (0-2), or None if it hasn't been read from the device yet."""
         return self._dirac_slot
+
+    @property
+    def loudness(self) -> bool | None:
+        """Whether loudness compensation is on, or None if the device hasn't reported it (it only does so over its streams)."""
+        return self._loudness
+
+    @property
+    def loudness_supported(self) -> bool | None:
+        """Whether this unit and firmware offer loudness compensation, or None if the device hasn't said."""
+        return self._loudness_supported
 
     @property
     def dirac_filtering(self) -> bool | None:
@@ -342,7 +354,7 @@ class Apr16(StatelessHTTPDevice):
         attrs = self._media_player_attributes[self.identifier]
         return (
             attrs.STATE, attrs.VOLUME, attrs.MUTED, attrs.SOURCE, attrs.SOUND_MODE,
-            self._dirac_filtering, self._dirac_slot, self._audio_signal,
+            self._dirac_filtering, self._dirac_slot, self._audio_signal, self._loudness, self._loudness_supported,
         )
 
     async def _refresh_audio_signal(self) -> None:
@@ -406,7 +418,7 @@ class Apr16(StatelessHTTPDevice):
     # Live state streams
     # =========================================================================
     #
-    # The device streams its audio (power, volume, mute, mode, signal), inputs and Dirac state
+    # The device streams its audio (power, volume, mute, mode, signal), inputs, Dirac and speaker state
     # over WebSockets and sends each one again whenever it changes. Each stream's complete
     # state is applied here and the remote is told only if something we show actually changed.
     # Polling keeps running underneath, slowly, as a safety net and for the sensors the
@@ -426,6 +438,7 @@ class Apr16(StatelessHTTPDevice):
                 ("audio", self._on_audio_state),
                 ("inputs", self._on_inputs_state),
                 ("dirac", self._on_dirac_state),
+                ("speakers", self._on_speakers_state),
             )
         ]
         for stream in self._streams:
@@ -450,6 +463,9 @@ class Apr16(StatelessHTTPDevice):
 
     def _on_dirac_state(self, state: dict[str, Any]) -> None:
         self._apply_stream_state(self._apply_dirac_state, state)
+
+    def _on_speakers_state(self, state: dict[str, Any]) -> None:
+        self._apply_stream_state(self._apply_speakers_state, state)
 
     def _apply_audio_state(self, state: dict[str, Any]) -> None:
         attrs = self._media_player_attributes[self.identifier]
@@ -487,6 +503,13 @@ class Apr16(StatelessHTTPDevice):
             self._dirac_slot = slot
         if isinstance(filtering := state.get("filtering_enabled"), bool):
             self._dirac_filtering = filtering
+
+    def _apply_speakers_state(self, state: dict[str, Any]) -> None:
+        # The stream describes every speaker too. Only the loudness setting is used here.
+        if isinstance(capability := state.get("loudness_capability"), str):
+            self._loudness_supported = capability == "supported"
+        if isinstance(loudness := state.get("loudness_enabled"), bool):
+            self._loudness = loudness
 
     def _volume_settling(self) -> bool:
         """True while a volume change of ours is still working its way through the device."""
@@ -794,7 +817,7 @@ class Apr16(StatelessHTTPDevice):
         self.push_update()
 
     # =========================================================================
-    # Dirac Live (Atlas RPC on port 80)
+    # Dirac Live and loudness (Atlas RPC on port 80)
     # =========================================================================
 
     async def async_get_dirac_active_slot(self) -> int:
@@ -845,6 +868,14 @@ class Apr16(StatelessHTTPDevice):
         success = await self._atlas_set(atlas.SET_FILTERING, payload)
         if success:
             self._dirac_filtering = enabled
+            self.push_update()
+        return success
+
+    async def async_set_loudness(self, enabled: bool) -> bool:
+        """Turn loudness compensation on or off."""
+        success = await self._atlas_set(atlas.SET_LOUDNESS, atlas.LOUDNESS_ON if enabled else atlas.LOUDNESS_OFF)
+        if success:
+            self._loudness = enabled
             self.push_update()
         return success
 

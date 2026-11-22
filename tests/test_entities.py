@@ -19,6 +19,7 @@ EXPECTED_ENTITIES = {
     "select.dev1.audio_mode": "APR Audio Mode",
     "select.dev1.dirac_slot": "APR Dirac Slot",
     "switch.dev1.dirac_filtering": "APR Dirac Filtering",
+    "switch.dev1.loudness": "APR Loudness",
     "sensor.dev1.volume_absolute": "APR Absolute Volume",
     "sensor.dev1.volume_relative": "APR Relative Volume",
     "sensor.dev1.audio_format": "APR Audio Format",
